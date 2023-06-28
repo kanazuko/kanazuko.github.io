@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.css": "/static/css/main.deceb2de.css",
+    "main.js": "/static/js/main.a07918b1.js",
+    "static/media/freecodecamp-logo.png": "/static/media/freecodecamp-logo.5486935b905c7949600c.png",
+    "index.html": "/index.html",
+    "main.deceb2de.css.map": "/static/css/main.deceb2de.css.map",
+    "main.a07918b1.js.map": "/static/js/main.a07918b1.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.deceb2de.css",
+    "static/js/main.a07918b1.js"
+  ]
+}
