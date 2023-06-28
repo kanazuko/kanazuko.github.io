@@ -26,6 +26,6 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-    - run: chmod a+x /node_modules/.bin/react-scripts
+    - run: chmod a+x /home/runner/work/kanazuko.github.io/kanazuko.github.io/node_modules/.bin/react-scripts
     - run: npm run build --if-present
     - run: npm run deploy
