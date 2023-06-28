@@ -28,6 +28,6 @@ jobs:
         cache: 'npm'
     - run: chmod a+x /home/runner/work/kanazuko.github.io/kanazuko.github.io/node_modules/.bin/react-scripts
     - run: npm install -g serve
-    - run: serve -s build
+    - run: serve -s build -l 8443
     - run: npm run build --if-present
     - run: npm run deploy
