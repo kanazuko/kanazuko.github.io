@@ -4,6 +4,9 @@
   "homepage": "https://kanazuko.github.io/",
   "private": true,
   "dependencies": {
+    "@testing-library/jest-dom": "^4",
+    "@testing-library/react": "^10",
+    "@testing-library/user-event": "^10",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
