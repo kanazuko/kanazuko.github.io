@@ -1,0 +1,32 @@
+@media screen and (max-width: 767px){
+    .navbar-brand{
+      display: none;
+    }
+  }
+  
+  @media screen and (min-width: 1200px){
+    .hero-inferior-imagen{
+      max-width: 700px;
+    }
+    
+  }
+  
+  @media screen and (max-width:400px){
+    .overlay p{
+      font-size: 18px;
+    }
+    .overlay i{
+      font-size: 35px;
+    }
+  }
+  
+  @media screen and (max-width:800px){
+    .testimonio-imagen{
+      height: 120px;
+      width: 120px;
+    }
+    
+    .testimonio-texto{
+      font-size: 15px;
+    }
+  }
