@@ -1,11 +1,9 @@
 .sobre-mi{
-    height: 500px;
+    height: 25%;
     padding: 10px;
   }
   
   .sobre-mi .contenedor{
-    max-width: 600px;
+    max-width: 1000px;
     text-align: center;
-    padding: 25px;
   }
-  
