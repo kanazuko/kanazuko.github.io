@@ -1,14 +1,23 @@
 {
   "files": {
-    "main.css": "/static/css/main.deceb2de.css",
-    "main.js": "/static/js/main.a07918b1.js",
-    "static/media/freecodecamp-logo.png": "/static/media/freecodecamp-logo.5486935b905c7949600c.png",
+    "main.css": "/static/css/main.38e14929.css",
+    "main.js": "/static/js/main.cfdfd70a.js",
+    "static/media/proyecto5.png": "/static/media/proyecto5.12a800d333a500e42c5b.png",
+    "static/media/proyecto1.png": "/static/media/proyecto1.b918f56a0b2489a2824a.png",
+    "static/media/proyecto3.png": "/static/media/proyecto3.5e8733e42b58a0dc585b.png",
+    "static/media/proyecto6.png": "/static/media/proyecto6.95465817a84978eb327a.png",
+    "static/media/proyecto2.png": "/static/media/proyecto2.e14bb539895203e6d82f.png",
+    "static/media/proyecto4.png": "/static/media/proyecto4.e2689ba51c4dc21f5502.png",
+    "static/media/hero-inferior-arq.webp": "/static/media/hero-inferior-arq.39cdf7993c793ce8fdd5.webp",
+    "static/media/testimonio-sarah.png": "/static/media/testimonio-sarah.add10415a5668325d2f2.png",
+    "static/media/testimonio-emma.png": "/static/media/testimonio-emma.2c504d1ebaf1961e4a40.png",
+    "static/media/qt=q_95.webp": "/static/media/qt=q_95.7e18a2dada7403eac0cd.webp",
     "index.html": "/index.html",
-    "main.deceb2de.css.map": "/static/css/main.deceb2de.css.map",
-    "main.a07918b1.js.map": "/static/js/main.a07918b1.js.map"
+    "main.38e14929.css.map": "/static/css/main.38e14929.css.map",
+    "main.cfdfd70a.js.map": "/static/js/main.cfdfd70a.js.map"
   },
   "entrypoints": [
-    "static/css/main.deceb2de.css",
-    "static/js/main.a07918b1.js"
+    "static/css/main.38e14929.css",
+    "static/js/main.cfdfd70a.js"
   ]
 }
