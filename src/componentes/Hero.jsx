@@ -10,7 +10,7 @@ function Header(){
               </div>
             </div>
           <div className="columna col-12 col-md-4">      
-          <h1>GVA ARQUITECTOS</h1>
+          <h1>GVA ARQUITECTOS!</h1>
           <h2>La firma líder de arquitectura en Latinoamérica</h2>
         </div>
       </div>
