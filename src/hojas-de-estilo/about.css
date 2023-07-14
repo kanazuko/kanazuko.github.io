@@ -5,5 +5,9 @@
   
   .sobre-mi .contenedor{
     max-width: 1000px;
+    text-align: justify;
+  }
+
+  .sobre-mi .seccion-titulo{
     text-align: center;
-  } 
+  }

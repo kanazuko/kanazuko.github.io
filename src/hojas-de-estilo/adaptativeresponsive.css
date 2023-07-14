@@ -8,9 +8,16 @@
     .hero-inferior-imagen{
       max-width: 700px;
     }
-    
+
   }
   
+        
+  @media screen and (max-width:1000px)and (min-width:767px){
+    .hero-principal h1{
+      font-size: 1.8rem;
+    }
+  }
+
   @media screen and (max-width:400px){
     .overlay p{
       font-size: 18px;
