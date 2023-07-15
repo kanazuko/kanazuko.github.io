@@ -17,14 +17,16 @@ function About(){
     </p>
     <p className='seccion-texto'>
       Esta virtud, y mi pasión por la tecnología y la computación, me llevó a que a la edad de 12 años me
-      hiciera la pregunta que cambiaría mi vida.
+      hiciera la pregunta que cambiaría mi vida:
     </p>
     <p className='seccion-titulo'>¿Cómo funciona una página web?</p>
-<a href="https://github.com/" target="_blank" rel="noopener noreferrer">
+    <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
+      <div className='button-class'>
     <button type="button" className="btn btn-info">
-      Leer más sobre GVA
+      Leer más sobre mi trayectoria de vida
       <i className="bi bi-arrow-right-circle-fill"></i>
     </button>
+    </div>
   </a>
     </div>
   </section>

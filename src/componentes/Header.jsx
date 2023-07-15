@@ -7,7 +7,7 @@ function Header(){
       <span className="navbar-toggler-icon"></span>
     </button>
     <div className="collapse navbar-collapse" id="navbar-toggler">
-      <a className="navbar-brand" href="#"><img src={require("../imagenes/qt=q_95.webp")} width="100" alt="Logo de la pagina web" /></a>
+      <a className="navbar-brand" href="#"><img src={require("../imagenes/logo192.png")} width="50" alt="Logo de la pagina web" /></a>
       <ul className="navbar-nav d-flex justify-content-center align-items-center">
         <li className="nav-item">
           <a className="nav-link active" aria-current="page" href="#">Inicio</a>

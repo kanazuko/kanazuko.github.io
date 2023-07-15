@@ -36,7 +36,7 @@ function Testimonios(){
           </div>
         </div>
         <div className="carousel-item">
-          <img src={require("../imagenes/proyectos/proyecto3.png")} className="d-block w-100" alt="..." />
+          <img src={require("../imagenes/proyectos/proyecto5.png")} className="d-block w-100" alt="..." />
         </div>
       </div>
       <button className="carousel-control-prev" type="button" data-bs-target="#testimonios-carrusel" data-bs-slide="prev">

@@ -5,17 +5,17 @@ function Proyectos(){
         
 <section className="proyectos-recientes seccion-clara d-flex flex-column">
     
-    <h2 className="seccion-titulo texto-negro">Proyectos</h2>
-    <h3 className="seccion-descripcion">Estos son algunos proyectos que hemos realizado recientemente</h3>
+    <h2 className="seccion-titulo texto-negro">Hobbies</h2>
+    <h3 className="seccion-descripcion">Estos son algunos de los hobbies que me llenan y apasionan</h3>
    {/* Galería de proyectos  */}
   <div className="container text-center proyectos-contenedor">
     <div className="row">
         {/* Proyecto 1  */}
       <div className="col-12 col-md-6 col-lg-4">
         <div className="proyecto">
-          <img src={require("../imagenes/proyectos/proyecto1.png")} alt="Proyecto 1" />
+          <img src={require("../imagenes/proyectos/hobbie1.jpg")} alt="Hobbie 1" />
           <div className="overlay">
-            <p>Proyecto 1</p>
+            <p>Billar</p>
             <div className="iconos-contenedor">
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
@@ -30,9 +30,9 @@ function Proyectos(){
     {/*  Proyecto 2  */}
       <div className="col-12 col-md-6 col-lg-4">
         <div className="proyecto">
-          <img src={require("../imagenes/proyectos/proyecto2.png")} alt="Proyecto 2" />
+          <img src={require("../imagenes/proyectos/hobbie2.jpg")} alt="Hobbie 2" />
           <div className="overlay">
-            <p>Proyecto 2</p>
+            <p>Arquería</p>
             <div className="iconos-contenedor">
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
@@ -47,9 +47,9 @@ function Proyectos(){
     {/* //    Proyecto 3  */}
       <div className="col-12 col-md-6 col-lg-4">
         <div className="proyecto">
-          <img src={require("../imagenes/proyectos/proyecto3.png")} alt="Proyecto 3" />
+          <img src={require("../imagenes/proyectos/hobbie3.png")} alt="Hobbie 3" />
           <div className="overlay">
-            <p>Proyecto 3</p>
+            <p>Fotografía</p>
             <div className="iconos-contenedor">
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
@@ -64,9 +64,9 @@ function Proyectos(){
     {/* //    Proyecto 4  */}
       <div className="col-12 col-md-6 col-lg-4">
         <div className="proyecto">
-          <img src={require("../imagenes/proyectos/proyecto4.png")} alt="Proyecto 4" />
+          <img src={require("../imagenes/proyectos/hobbie4.jpg")} alt="Hobbie 4" />
           <div className="overlay">
-            <p>Proyecto 4</p>
+            <p>Baseball</p>
             <div className="iconos-contenedor">
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
@@ -81,9 +81,9 @@ function Proyectos(){
     {/* //    Proyecto 5  */}
       <div className="col-12 col-md-6 col-lg-4">
         <div className="proyecto">
-          <img src={require("../imagenes/proyectos/proyecto5.png")} alt="Proyecto 5" />
+          <img src={require("../imagenes/proyectos/hobbie5.jpg")} alt="Hobbie 5" />
           <div className="overlay">
-            <p>Proyecto 5</p>
+            <p>Fotografía</p>
             <div className="iconos-contenedor">
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
@@ -98,9 +98,9 @@ function Proyectos(){
     {/* //    Proyecto 6  */}
       <div className="col-12 col-md-6 col-lg-4">
         <div className="proyecto">
-          <img src={require("../imagenes/proyectos/proyecto6.png")} alt="Proyecto 6" />
+          <img src={require("../imagenes/proyectos/hobbie6.jpg")} alt="Proyecto 6" />
           <div className="overlay">
-            <p>Proyecto 6</p>
+            <p>Gaming</p>
             <div className="iconos-contenedor">
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
@@ -114,12 +114,12 @@ function Proyectos(){
       </div>
     </div>
   </div>
-  <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
+  {/* <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
     <button type="button" className="btn btn-info">
       Ver más proyectos
       <i className="bi bi-arrow-right-circle-fill"></i>
     </button>
-  </a>
+  </a> */}
   </section>
 
   );

@@ -5,9 +5,16 @@
   
   .sobre-mi .contenedor{
     max-width: 1000px;
+  }
+
+  .sobre-mi .seccion-texto{
     text-align: justify;
   }
 
   .sobre-mi .seccion-titulo{
+    text-align: center;
+  }
+
+  .sobre-mi .button-class{
     text-align: center;
   }

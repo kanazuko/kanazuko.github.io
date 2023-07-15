@@ -10,23 +10,28 @@ import Articulos from './componentes/Articulos.jsx';
 import Testimonios from './componentes/Testimonios.jsx';
 import Footer from './componentes/Footer.jsx';
 
-//import {useState} from 'react';
+import React, { Component }  from 'react';
+import {useState} from 'react';
 
 
-function App() {
-  return (
+function App() { 
+
+  return(
     <div className="App">
-      <Header />
-      <Hero />
-      <About />
-      <Experiencia />
-      <Proyectos />
-      <Articulos />
-      <Testimonios />
-      <Footer />
+      <div className='freecodecamp-logo-contenedor'>
+      </div>
+        <div className='contenedor-principal'>
+          <Header />
+          <Hero />
+          <About />
+          <Experiencia />
+          <Proyectos />
+          <Articulos />
+          <Testimonios />
+          <Footer />
+      </div>
     </div>
   );
-
+   
 }
-
 export default App;

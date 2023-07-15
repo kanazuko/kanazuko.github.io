@@ -2,7 +2,10 @@ import '../hojas-de-estilo/hero.css'
 function Header(){
     return(<section className="hero align-items-stretch">
     <div className="hero-principal d-flex flex-column justify-content-center align-items-center">
-          <img className="hero-imagen-desarrollador" src={require("../imagenes/retratoTitulo.png")} width="100" alt="GVA Logo" />
+      <div className="text-center align-items-center">
+          <img className="hero-imagen-desarrollador" src={require("../imagenes/retratoTitulo.png")} width="100" alt="Foto Titulo" />
+          <img className="hero-banner" src={require("../imagenes/banner.png")} alt="Banner" />
+      </div>
           <div className="row text-center align-items-center">
             <div className="columna col-12 col-md-8">
               <div className="hero-inferior">
