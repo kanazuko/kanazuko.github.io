@@ -1,24 +1,25 @@
 {
   "files": {
-    "main.css": "/static/css/main.424a8134.css",
-    "main.js": "/static/js/main.2f269efc.js",
+    "main.css": "/static/css/main.c52899e4.css",
+    "main.js": "/static/js/main.f6252084.js",
+    "static/media/banner.png": "/static/media/banner.8695f916a148210a3ce8.png",
     "static/media/proyecto5.png": "/static/media/proyecto5.12a800d333a500e42c5b.png",
-    "static/media/proyecto1.png": "/static/media/proyecto1.b918f56a0b2489a2824a.png",
-    "static/media/proyecto3.png": "/static/media/proyecto3.5e8733e42b58a0dc585b.png",
-    "static/media/proyecto6.png": "/static/media/proyecto6.95465817a84978eb327a.png",
-    "static/media/proyecto2.png": "/static/media/proyecto2.e14bb539895203e6d82f.png",
-    "static/media/proyecto4.png": "/static/media/proyecto4.e2689ba51c4dc21f5502.png",
+    "static/media/hobbie4.jpg": "/static/media/hobbie4.1df84ee46d6ea4ce783b.jpg",
+    "static/media/hobbie5.jpg": "/static/media/hobbie5.9636c3247c6ec1c51850.jpg",
+    "static/media/hobbie3.png": "/static/media/hobbie3.c65121e2b39d7e10e075.png",
     "static/media/retratoTitulo.png": "/static/media/retratoTitulo.393f125e7490d0e10634.png",
+    "static/media/hobbie2.jpg": "/static/media/hobbie2.f5a21d8536e41c9c76cc.jpg",
     "static/media/testimonio-sarah.png": "/static/media/testimonio-sarah.add10415a5668325d2f2.png",
     "static/media/testimonio-emma.png": "/static/media/testimonio-emma.2c504d1ebaf1961e4a40.png",
+    "static/media/hobbie1.jpg": "/static/media/hobbie1.e0a69c86e5fe8db20c27.jpg",
     "static/media/4045240_a392_3.jpg": "/static/media/4045240_a392_3.29a20f496752e1d2d322.jpg",
-    "static/media/qt=q_95.webp": "/static/media/qt=q_95.7e18a2dada7403eac0cd.webp",
+    "static/media/hobbie6.jpg": "/static/media/hobbie6.b286f4757fe77d99d453.jpg",
     "index.html": "/index.html",
-    "main.424a8134.css.map": "/static/css/main.424a8134.css.map",
-    "main.2f269efc.js.map": "/static/js/main.2f269efc.js.map"
+    "main.c52899e4.css.map": "/static/css/main.c52899e4.css.map",
+    "main.f6252084.js.map": "/static/js/main.f6252084.js.map"
   },
   "entrypoints": [
-    "static/css/main.424a8134.css",
-    "static/js/main.2f269efc.js"
+    "static/css/main.c52899e4.css",
+    "static/js/main.f6252084.js"
   ]
 }
