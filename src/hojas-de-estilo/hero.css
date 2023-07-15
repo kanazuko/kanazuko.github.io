@@ -1,26 +1,24 @@
 .hero{
-    background-color: white;
-    min-height: 450px;
-    text-align: center;
-    padding: 0 0 50px;
+  background-color: white;
+  min-height: 450px;
+  text-align: center;
+  padding: 0 0 50px;
+}
+
+.hero-principal{
+  padding: 3rem;
+}
+.hero-imagen-desarrollador{
+  width: 150px;
+  border-radius: 50%;
+  margin: 20px;
   }
-  
-  .hero-principal{
-    padding: 3rem;
-  }
-  .hero-imagen-desarrollador{
-    width: 250px;
-    height: 250px;
-    border-radius: 50%;
-    margin: 20px;
-  }
-  
-  .hero-principal .row{
-   background-color:  #f5f6f7;
-   text-align: center;
-  
-  }
-  .hero-principal h2{
-    font-size: 1.5rem;
-    color: #615151;
-  }
+
+.hero-principal .row{
+ background-color:  #f5f6f7;
+ text-align: center;
+}
+.hero-principal h2{
+  font-size: 1.5rem;
+  color: #615151;
+}
