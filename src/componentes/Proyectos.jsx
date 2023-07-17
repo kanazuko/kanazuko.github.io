@@ -20,7 +20,7 @@ function Proyectos(){
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
               </a>
-              <a href="https://www.freecodecamp.org/" target="_blank" rel="noopener noreferrer">
+              <a href="#" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-laptop"></i>
               </a>
               </div>
@@ -37,7 +37,7 @@ function Proyectos(){
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
               </a>
-              <a href="https://www.freecodecamp.org/" target="_blank" rel="noopener noreferrer">
+              <a href="#" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-laptop"></i>
               </a>
               </div>
@@ -54,7 +54,7 @@ function Proyectos(){
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
               </a>
-              <a href="https://www.freecodecamp.org/" target="_blank" rel="noopener noreferrer">
+              <a href="#" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-laptop"></i>
               </a>
               </div>
@@ -71,7 +71,7 @@ function Proyectos(){
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
               </a>
-              <a href="https://www.freecodecamp.org/" target="_blank" rel="noopener noreferrer">
+              <a href="#" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-laptop"></i>
               </a>
               </div>
@@ -88,7 +88,7 @@ function Proyectos(){
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
               </a>
-              <a href="https://www.freecodecamp.org/" target="_blank" rel="noopener noreferrer">
+              <a href="#" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-laptop"></i>
               </a>
               </div>
@@ -105,7 +105,7 @@ function Proyectos(){
               <a href="https://github.com/" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github"></i>
               </a>
-              <a href="https://www.freecodecamp.org/" target="_blank" rel="noopener noreferrer">
+              <a href="#" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-laptop"></i>
               </a>
               </div>

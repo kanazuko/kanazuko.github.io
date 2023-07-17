@@ -10,20 +10,20 @@ function Articulos(){
         Más recientes
       </div>
       <ul className="list-group list-group-flush">
-        <a href="https://www.freecodecamp.org/espanol/news" target="_blank" rel="noopener noreferrer">
+        <a href="#" target="_blank" rel="noopener noreferrer">
         <li className="list-group-item">Lorem ipsum, dolor sit amet consectetur adipisicing elit. Saepe, corrupti.</li>
         </a>
-        <a href="https://www.freecodecamp.org/espanol/news" target="_blank" rel="noopener noreferrer">
+        <a href="#" target="_blank" rel="noopener noreferrer">
         <li className="list-group-item">Vitae suscipit, assumenda, optio repellendus illo numquam eius nulla rerum reprehenderit beatae iusto laboriosam enim!</li>
         </a>
-        <a href="https://www.freecodecamp.org/espanol/news" target="_blank" rel="noopener noreferrer">
+        <a href="#" target="_blank" rel="noopener noreferrer">
         <li className="list-group-item">Molestiae saepe in adipisci delectus voluptatem nostrum reiciendis!
         </li>
         </a>
-        <a href="https://www.freecodecamp.org/espanol/news" target="_blank" rel="noopener noreferrer">
+        <a href="#" target="_blank" rel="noopener noreferrer">
           <li className="list-group-item">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Saepe cum porro sed, nam cupiditate ipsa vitae nisi delectus eveniet eos.</li>
         </a>
-        <a href="https://www.freecodecamp.org/espanol/news" target="_blank" rel="noopener noreferrer">
+        <a href="#" target="_blank" rel="noopener noreferrer">
           <li className="list-group-item">Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptas porro explicabo delectus soluta, ex corporis?</li>
         </a>
       </ul>
