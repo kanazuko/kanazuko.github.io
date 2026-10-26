@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import ProductForm from '../../components/admin/ProductForm'
+import ProductImageManager from '../../components/admin/ProductImageManager'
 import ErrorState from '../../components/feedback/ErrorState'
 import LoadingState from '../../components/feedback/LoadingState'
 import {
@@ -74,7 +75,7 @@ export default function AdminProductFormPage() {
     <div className="admin-page admin-page--form">
       <div className="admin-breadcrumb"><Link to="/admin/productos">Productos</Link><span>/</span><span>{editing ? 'Editar' : 'Nuevo'}</span></div>
       <header className="admin-page__header">
-        <div><p className="eyebrow">{editing ? 'Edición' : 'Nueva pieza'}</p><h1>{editing ? product.name : 'Agregar producto'}</h1><p>Las fotografías se gestionarán en una fase posterior.</p></div>
+        <div><p className="eyebrow">{editing ? 'Edición' : 'Nueva pieza'}</p><h1>{editing ? product.name : 'Agregar producto'}</h1><p>{editing ? 'Actualiza la información y administra sus fotografías.' : 'Completa la información básica de la pieza.'}</p></div>
       </header>
       <ProductForm
         product={product}
@@ -84,6 +85,14 @@ export default function AdminProductFormPage() {
         onSubmit={handleSubmit}
         onCancel={() => navigate('/admin/productos')}
       />
+      {editing ? (
+        <ProductImageManager productId={product.id} productName={product.name} />
+      ) : (
+        <section className="admin-form-section image-manager-placeholder">
+          <div className="admin-form-section__heading"><h2>Fotografías</h2><p>Disponible después de crear el producto.</p></div>
+          <p>Guarda primero la información básica. Después podrás abrir el producto y subir sus fotografías desde esta misma pantalla.</p>
+        </section>
+      )}
     </div>
   )
 }

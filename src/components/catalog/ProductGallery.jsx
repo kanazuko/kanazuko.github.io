@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import SafeImage from './SafeImage'
 
 export default function ProductGallery({ images, productName }) {
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -11,7 +12,8 @@ export default function ProductGallery({ images, productName }) {
   return (
     <div className="product-gallery">
       <div className="product-gallery__main">
-        <img
+        <SafeImage
+          key={selectedImage.id}
           src={selectedImage.url}
           alt={selectedImage.alt_text || productName}
           fetchPriority="high"
@@ -28,7 +30,7 @@ export default function ProductGallery({ images, productName }) {
               aria-label={`Mostrar fotografía ${index + 1} de ${productName}`}
               aria-pressed={index === selectedIndex}
             >
-              <img src={image.url} alt="" loading="lazy" />
+              <SafeImage key={image.id} src={image.url} alt="" loading="lazy" fallback="×" />
             </button>
           ))}
         </div>

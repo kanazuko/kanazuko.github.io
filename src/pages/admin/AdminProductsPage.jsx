@@ -140,6 +140,11 @@ export default function AdminProductsPage() {
       setDeleteTarget(null)
     } catch (error) {
       console.error(error)
+      if (error.productDeleted) {
+        console.error('Rutas pendientes de limpieza:', error.orphanedPaths)
+        setProducts((current) => current.filter((product) => product.id !== deleteTarget.id))
+        setDeleteTarget(null)
+      }
       setNotification({ type: 'error', message: getProductMutationError(error) })
     } finally {
       setPendingId(null)

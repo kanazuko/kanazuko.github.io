@@ -78,8 +78,35 @@ export async function updateAdminProduct(id, changes) {
 }
 
 export async function deleteAdminProduct(id) {
+  const { data: images, error: imageError } = await supabase
+    .from('product_images')
+    .select('storage_path')
+    .eq('product_id', id)
+
+  if (imageError) throw imageError
+
+  const expectedPrefix = `products/${id}/`
+  const paths = images.map((image) => image.storage_path)
+  if (paths.some((path) => !path.startsWith(expectedPrefix))) {
+    throw new Error('Se canceló el borrado porque no se pudo verificar la pertenencia de todas las fotografías.')
+  }
+
   const { error } = await supabase.from('products').delete().eq('id', id)
   if (error) throw error
+  if (!paths.length) return
+
+  let { error: cleanupError } = await supabase.storage.from('product-images').remove(paths)
+  if (cleanupError) {
+    const retry = await supabase.storage.from('product-images').remove(paths)
+    cleanupError = retry.error
+  }
+
+  if (cleanupError) {
+    const partialError = new Error('El producto fue eliminado, pero algunos archivos no pudieron limpiarse de Storage. Las rutas afectadas se registraron en la consola.')
+    partialError.productDeleted = true
+    partialError.orphanedPaths = paths
+    throw partialError
+  }
 }
 
 export function getProductMutationError(error) {

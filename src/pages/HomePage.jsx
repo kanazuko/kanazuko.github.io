@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import CategoryCard from '../components/catalog/CategoryCard'
 import ProductGrid from '../components/catalog/ProductGrid'
+import SafeImage from '../components/catalog/SafeImage'
 import EmptyState from '../components/feedback/EmptyState'
 import ErrorState from '../components/feedback/ErrorState'
 import LoadingState from '../components/feedback/LoadingState'
@@ -25,7 +26,7 @@ export default function HomePage() {
           </div>
           <div className="hero-visual" aria-label={featured.data?.[0] ? `Pieza destacada: ${featured.data[0].name}` : 'PRArtJewelry'}>
             {featured.data?.[0]?.primaryImage ? (
-              <img src={featured.data[0].primaryImage.url} alt={featured.data[0].primaryImage.alt_text || featured.data[0].name} />
+              <SafeImage key={featured.data[0].primaryImage.id} src={featured.data[0].primaryImage.url} alt={featured.data[0].primaryImage.alt_text || featured.data[0].name} fallback="PRArtJewelry" />
             ) : (
               <div className="hero-monogram" aria-hidden="true"><span>PR</span><small>Art · Jewelry</small></div>
             )}

@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom'
 import { formatAvailability, formatCurrency } from '../../utils/formatters'
+import SafeImage from './SafeImage'
 
 export default function ProductCard({ product }) {
   return (
     <article className="product-card">
       <Link to={`/producto/${product.slug}`} className="product-card__media">
         {product.primaryImage ? (
-          <img
+          <SafeImage
+            key={product.primaryImage.id}
             src={product.primaryImage.url}
             alt={product.primaryImage.alt_text || product.name}
             loading="lazy"
