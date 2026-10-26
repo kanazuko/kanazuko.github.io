@@ -29,6 +29,10 @@ jobs:
         run: npm ci
       - name: Build site
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_WHATSAPP_NUMBER: ${{ vars.VITE_WHATSAPP_NUMBER }}
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site artifact
