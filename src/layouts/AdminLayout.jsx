@@ -29,6 +29,9 @@ export default function AdminLayout() {
           <NavLink to="/admin" end>
             <span aria-hidden="true">◇</span> Resumen
           </NavLink>
+          <NavLink to="/admin/productos">
+            <span aria-hidden="true">□</span> Productos
+          </NavLink>
         </nav>
         <div className="admin-account">
           <span className="admin-account__avatar" aria-hidden="true">

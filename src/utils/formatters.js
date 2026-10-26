@@ -26,3 +26,13 @@ export function formatAvailability(value) {
 export function formatAttributeName(value = '') {
   return titleFromSlug(value.replaceAll('_', '-'))
 }
+
+export function slugify(value = '') {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es')
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}

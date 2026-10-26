@@ -1,4 +1,5 @@
 import { useAuth } from '../../hooks/useAuth'
+import { Link } from 'react-router-dom'
 
 export default function AdminDashboardPage() {
   const { user } = useAuth()
@@ -14,6 +15,7 @@ export default function AdminDashboardPage() {
           <p className="eyebrow">Catálogo</p>
           <h2>Gestiona tu colección</h2>
           <p>El acceso está protegido por Supabase Auth y las operaciones dependen de las políticas RLS existentes.</p>
+          <Link className="admin-button" to="/admin/productos">Ver productos</Link>
         </section>
         <section className="admin-panel">
           <p className="admin-panel__label">Estado</p>
