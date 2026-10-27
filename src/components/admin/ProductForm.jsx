@@ -27,8 +27,8 @@ const emptyProduct = {
 
 function createInitialValues(product, categories) {
   if (!product) {
-    const anillosCategory = categories.find((category) => category.name.trim().toLocaleLowerCase('es-MX') === 'anillos')
-    return { ...emptyProduct, category_id: anillosCategory?.id ?? '' }
+    const aretesCategory = categories.find((category) => category.name.trim().toLocaleLowerCase('es-MX') === 'aretes')
+    return { ...emptyProduct, category_id: aretesCategory?.id ?? '' }
   }
   return {
     category_id: product.category_id ?? '',
