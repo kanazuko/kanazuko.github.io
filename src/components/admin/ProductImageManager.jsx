@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import ConfirmDialog from '../feedback/ConfirmDialog'
 import ErrorState from '../feedback/ErrorState'
 import LoadingState from '../feedback/LoadingState'
@@ -263,6 +264,9 @@ export default function ProductImageManager({ productId, productName }) {
                 ))}
               </div>
             )}
+            <div className="image-manager__new-product">
+              <Link className="admin-button admin-button--secondary" to="/admin/productos/nuevo">Crear producto nuevo</Link>
+            </div>
           </>
         )}
       </div>

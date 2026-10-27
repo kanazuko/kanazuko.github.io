@@ -54,12 +54,13 @@ export default function AdminProductFormPage() {
     setSubmitting(true)
     setServerError('')
     try {
-      if (editing) await updateAdminProduct(id, values)
-      else await createAdminProduct(values)
+      const savedProduct = editing
+        ? await updateAdminProduct(id, values)
+        : await createAdminProduct(values)
 
-      navigate('/admin/productos', {
+      navigate(`/admin/productos/${savedProduct.id}/editar`, {
         replace: true,
-        state: { notice: { type: 'success', message: editing ? 'Producto actualizado correctamente.' : 'Producto creado correctamente.' } },
+        state: { notice: { type: 'success', message: editing ? 'Producto actualizado correctamente.' : 'Producto creado correctamente. Ya puedes subir sus fotografías.' } },
       })
     } catch (error) {
       console.error(error)
@@ -78,6 +79,7 @@ export default function AdminProductFormPage() {
         <div><p className="eyebrow">{editing ? 'Edición' : 'Nueva pieza'}</p><h1>{editing ? product.name : 'Agregar producto'}</h1><p>{editing ? 'Actualiza la información y administra sus fotografías.' : 'Completa la información básica de la pieza.'}</p></div>
       </header>
       <ProductForm
+        key={editing ? id : 'new'}
         product={product}
         categories={categories}
         submitting={submitting}

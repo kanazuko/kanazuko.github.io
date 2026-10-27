@@ -15,18 +15,21 @@ const emptyProduct = {
   description: '',
   price: '',
   compare_at_price: '',
-  material: '',
+  material: 'Acero Inoxidable',
   color: '',
   size: '',
   attributes: '{}',
   availability: 'available',
-  is_published: false,
+  is_published: true,
   is_featured: false,
   sort_order: '0',
 }
 
-function createInitialValues(product) {
-  if (!product) return emptyProduct
+function createInitialValues(product, categories) {
+  if (!product) {
+    const anillosCategory = categories.find((category) => category.name.trim().toLocaleLowerCase('es-MX') === 'anillos')
+    return { ...emptyProduct, category_id: anillosCategory?.id ?? '' }
+  }
   return {
     category_id: product.category_id ?? '',
     sku: product.sku ?? '',
@@ -78,7 +81,7 @@ function nullable(value) {
 }
 
 export default function ProductForm({ product, categories, submitting, serverError, onSubmit, onCancel }) {
-  const [values, setValues] = useState(() => createInitialValues(product))
+  const [values, setValues] = useState(() => createInitialValues(product, categories))
   const [errors, setErrors] = useState({})
   const [slugEdited, setSlugEdited] = useState(Boolean(product?.slug))
 
