@@ -13,6 +13,14 @@ export function titleFromSlug(slug = '') {
     .join(' ')
 }
 
+export function toTitleCase(value = '') {
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('es-MX')
+    .replace(/(^|[^\p{L}\p{N}])(\p{L})/gu, (_, separator, letter) => `${separator}${letter.toLocaleUpperCase('es-MX')}`)
+}
+
 const availabilityLabels = {
   available: 'Disponible',
   out_of_stock: 'Agotado',

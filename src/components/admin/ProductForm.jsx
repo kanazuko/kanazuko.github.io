@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { slugify } from '../../utils/formatters'
+import { slugify, toTitleCase } from '../../utils/formatters'
 
 const availabilityOptions = [
   { value: 'available', label: 'Disponible' },
@@ -108,7 +108,7 @@ export default function ProductForm({ product, categories, submitting, serverErr
     onSubmit({
       category_id: values.category_id || null,
       sku: nullable(values.sku),
-      name: values.name.trim(),
+      name: toTitleCase(values.name),
       slug: values.slug.trim(),
       description: nullable(values.description),
       price: Number(values.price),
