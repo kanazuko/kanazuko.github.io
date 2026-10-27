@@ -58,6 +58,7 @@ export default function AdminProductFormPage() {
         ? await updateAdminProduct(id, values)
         : await createAdminProduct(values)
 
+      setSubmitting(false)
       navigate(`/admin/productos/${savedProduct.id}/editar`, {
         replace: true,
         state: { notice: { type: 'success', message: editing ? 'Producto actualizado correctamente.' : 'Producto creado correctamente. Ya puedes subir sus fotografías.' } },
@@ -69,7 +70,7 @@ export default function AdminProductFormPage() {
     }
   }
 
-  if (loading) return <LoadingState label={editing ? 'Cargando producto…' : 'Preparando formulario…'} />
+  if (loading || (editing && product?.id !== id && !loadError)) return <LoadingState label={editing ? 'Cargando producto…' : 'Preparando formulario…'} />
   if (loadError) return <ErrorState message={loadError} />
 
   return (
@@ -80,7 +81,7 @@ export default function AdminProductFormPage() {
       </header>
       <ProductForm
         key={editing ? id : 'new'}
-        product={product}
+        product={editing ? product : null}
         categories={categories}
         submitting={submitting}
         serverError={serverError}
