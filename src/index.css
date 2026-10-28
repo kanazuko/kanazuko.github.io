@@ -114,6 +114,8 @@ p { line-height: 1.7; }
 .availability--made_to_order { color: #987337; }
 
 .product-detail { display: grid; align-items: start; gap: 2.5rem; }
+.product-detail__back { grid-column: 1 / -1; }
+.product-detail__back .button { min-height: 2.5rem; padding: 0.55rem 1rem; }
 .product-detail__content { padding-top: 1rem; }
 .product-detail__content h1 { margin: 0.5rem 0 1.25rem; font-size: clamp(2.3rem, 5vw, 4rem); }
 .product-pricing { display: flex; align-items: baseline; gap: 0.8rem; margin-bottom: 1rem; }

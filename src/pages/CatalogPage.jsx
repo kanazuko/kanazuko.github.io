@@ -1,20 +1,25 @@
 import { useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import CatalogControls from '../components/catalog/CatalogControls'
 import ProductGrid from '../components/catalog/ProductGrid'
 import ErrorState from '../components/feedback/ErrorState'
 import LoadingState from '../components/feedback/LoadingState'
 import { useCategories, useProducts } from '../hooks/useCatalog'
+import { useRestoreScrollPosition } from '../hooks/useScrollPosition'
 
 function normalize(value = '') {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es')
 }
 
 export default function CatalogPage() {
+  const location = useLocation()
   const products = useProducts()
   const categories = useCategories()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
   const [sort, setSort] = useState('featured')
+
+  useRestoreScrollPosition(location.key, Boolean(products.data))
 
   const visibleProducts = useMemo(() => {
     const search = normalize(query.trim())

@@ -1,13 +1,17 @@
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import ProductGrid from '../components/catalog/ProductGrid'
 import ErrorState from '../components/feedback/ErrorState'
 import LoadingState from '../components/feedback/LoadingState'
 import { useCategoryProducts } from '../hooks/useCatalog'
+import { useRestoreScrollPosition } from '../hooks/useScrollPosition'
 import { titleFromSlug } from '../utils/formatters'
 
 export default function CategoryPage() {
   const { slug } = useParams()
+  const location = useLocation()
   const { data, loading, error } = useCategoryProducts(slug)
+
+  useRestoreScrollPosition(location.key, Boolean(data))
 
   return (
     <section className="section container">

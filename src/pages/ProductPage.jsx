@@ -1,4 +1,5 @@
-import { Link, useParams } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import AvailabilityBadge from '../components/catalog/AvailabilityBadge'
 import ProductGallery from '../components/catalog/ProductGallery'
 import ProductGrid from '../components/catalog/ProductGrid'
@@ -9,7 +10,7 @@ import { formatAttributeName, formatCurrency } from '../utils/formatters'
 
 const whatsappNumber = import.meta.env.VITE_WHATSAPP_NUMBER?.replace(/\D/g, '')
 
-function ProductContent({ product }) {
+function ProductContent({ product, onBack, returnTo }) {
   const related = useRelatedProducts(product.category?.id, product.id)
   const attributes = Object.entries(product.attributes ?? {}).filter(([, value]) => (
     value !== null && value !== '' && typeof value !== 'object'
@@ -22,6 +23,7 @@ function ProductContent({ product }) {
   return (
     <>
       <article className="section container product-detail">
+        <div className="product-detail__back"><button className="button button--secondary" type="button" onClick={onBack}>← Regresar a {returnTo?.pathname.startsWith('/categoria/') ? 'la colección' : 'catálogo'}</button></div>
         <ProductGallery key={product.id} images={product.images} productName={product.name} />
         <div className="product-detail__content">
           {product.category && (
@@ -81,12 +83,23 @@ function ProductContent({ product }) {
 
 export default function ProductPage() {
   const { slug } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
   const { data: product, loading, error } = useProduct(slug)
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [slug])
+
+  function handleBack() {
+    if (location.state?.returnTo) navigate(-1)
+    else navigate('/catalogo')
+  }
 
   if (loading) return <LoadingState label="Cargando pieza…" fullPage />
   if (error || !product) {
     return <div className="section container"><ErrorState message="No encontramos esta pieza o ya no está disponible." /></div>
   }
 
-  return <ProductContent product={product} />
+  return <ProductContent product={product} onBack={handleBack} returnTo={location.state?.returnTo} />
 }

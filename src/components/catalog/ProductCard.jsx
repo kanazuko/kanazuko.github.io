@@ -1,11 +1,17 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { formatAvailability, formatCurrency } from '../../utils/formatters'
+import { saveScrollPosition } from '../../hooks/useScrollPosition'
 import SafeImage from './SafeImage'
 
 export default function ProductCard({ product }) {
+  const location = useLocation()
+  const productPath = `/producto/${product.slug}`
+  const productState = { returnTo: { pathname: location.pathname, search: location.search } }
+  const rememberScrollPosition = () => saveScrollPosition(location.key)
+
   return (
     <article className="product-card">
-      <Link to={`/producto/${product.slug}`} className="product-card__media">
+      <Link to={productPath} state={productState} className="product-card__media" onClick={rememberScrollPosition}>
         {product.primaryImage ? (
           <SafeImage
             key={product.primaryImage.id}
@@ -23,7 +29,7 @@ export default function ProductCard({ product }) {
             {product.category.name}
           </Link>
         )}
-        <h3><Link to={`/producto/${product.slug}`}>{product.name}</Link></h3>
+        <h3><Link to={productPath} state={productState} onClick={rememberScrollPosition}>{product.name}</Link></h3>
         <div className="product-card__footer">
           <p className="price">{formatCurrency(product.price)}</p>
           <span className={`availability availability--${product.availability}`}>
