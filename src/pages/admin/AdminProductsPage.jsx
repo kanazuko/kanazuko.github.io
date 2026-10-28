@@ -13,6 +13,7 @@ import {
   getAdminProducts,
   getProductMutationError,
   updateAdminProduct,
+  updateAdminProductsSubcategory,
 } from '../../services/adminProductService'
 
 const initialFilters = { query: '', category: '', published: '', availability: '', sort: 'catalog' }
@@ -31,6 +32,9 @@ export default function AdminProductsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [filters, setFilters] = useState(initialFilters)
   const [notification, setNotification] = useState(() => location.state?.notice ?? null)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [bulkSubcategoryId, setBulkSubcategoryId] = useState('')
+  const [bulkSaving, setBulkSaving] = useState(false)
 
   const fetchData = useCallback(async () => {
     const [productData, categoryData] = await Promise.all([
@@ -100,6 +104,41 @@ export default function AdminProductsPage() {
     setFilters((current) => ({ ...current, [name]: value }))
   }
 
+  function handleSelectionChange(ids) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      ids.forEach((id) => next.has(id) ? next.delete(id) : next.add(id))
+      return next
+    })
+  }
+
+  function handleSelectAll(ids, selected) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      ids.forEach((id) => selected ? next.add(id) : next.delete(id))
+      return next
+    })
+  }
+
+  async function handleBulkSubcategory() {
+    const subcategory = categories.find((item) => item.id === bulkSubcategoryId)
+    if (!subcategory || !selectedIds.size) return
+    setBulkSaving(true)
+    try {
+      await updateAdminProductsSubcategory([...selectedIds], subcategory)
+      const { productData } = await fetchData()
+      setProducts(productData)
+      setSelectedIds(new Set())
+      setBulkSubcategoryId('')
+      setNotification({ type: 'success', message: 'Subcategoría asignada a los productos seleccionados.' })
+    } catch (error) {
+      console.error(error)
+      setNotification({ type: 'error', message: getProductMutationError(error) })
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
   async function handleToggle(product, field) {
     setPendingId(product.id)
     setNotification(null)
@@ -165,12 +204,22 @@ export default function AdminProductsPage() {
       {!loading && !loadError && (
         <>
           <AdminProductFilters filters={filters} categories={categories} onChange={changeFilter} resultCount={visibleProducts.length} />
+          {selectedIds.size > 0 && (
+            <div className="admin-bulk-actions">
+              <strong>{selectedIds.size} {selectedIds.size === 1 ? 'producto seleccionado' : 'productos seleccionados'}</strong>
+              <select value={bulkSubcategoryId} onChange={(event) => setBulkSubcategoryId(event.target.value)} aria-label="Subcategoría para productos seleccionados">
+                <option value="">Asignar a subcategoría…</option>
+                {categories.filter((category) => category.parent_id).map((category) => <option key={category.id} value={category.id}>{categories.find((parent) => parent.id === category.parent_id)?.name} · {category.name}</option>)}
+              </select>
+              <button className="admin-button" type="button" onClick={handleBulkSubcategory} disabled={!bulkSubcategoryId || bulkSaving}>{bulkSaving ? 'Asignando…' : 'Asignar'}</button>
+            </div>
+          )}
           {products.length === 0 ? (
             <div className="admin-empty"><EmptyState message="Todavía no hay productos. Crea la primera pieza del catálogo." /><Link className="admin-button" to="/admin/productos/nuevo">Crear producto</Link></div>
           ) : visibleProducts.length === 0 ? (
             <EmptyState message="Ningún producto coincide con los filtros seleccionados." />
           ) : (
-            <AdminProductTable products={visibleProducts} pendingId={pendingId} onToggle={handleToggle} onAvailabilityChange={handleAvailabilityChange} onDelete={setDeleteTarget} />
+            <AdminProductTable products={visibleProducts} pendingId={pendingId} onToggle={handleToggle} onAvailabilityChange={handleAvailabilityChange} onDelete={setDeleteTarget} selectedIds={selectedIds} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
           )}
         </>
       )}

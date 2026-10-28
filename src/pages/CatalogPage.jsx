@@ -17,6 +17,9 @@ export default function CatalogPage() {
   const categories = useCategories()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
+  const [subcategory, setSubcategory] = useState('')
+  const [color, setColor] = useState('')
+  const [tag, setTag] = useState('')
   const [sort, setSort] = useState('featured')
 
   useRestoreScrollPosition(location.key, Boolean(products.data))
@@ -25,13 +28,17 @@ export default function CatalogPage() {
     const search = normalize(query.trim())
     const filtered = (products.data ?? []).filter((product) => {
       const matchesCategory = !category || product.category?.slug === category
+      const matchesSubcategory = !subcategory || product.subcategory?.slug === subcategory
+      const productColors = (product.color ?? '').split(',').map((item) => normalize(item.trim())).filter(Boolean)
+      const matchesColor = !color || productColors.includes(normalize(color))
+      const matchesTag = !tag || product.tags?.some((item) => item.slug === tag)
       const searchable = normalize([
         product.name,
         product.description,
         product.material,
         product.color,
       ].filter(Boolean).join(' '))
-      return matchesCategory && (!search || searchable.includes(search))
+      return matchesCategory && matchesSubcategory && matchesColor && matchesTag && (!search || searchable.includes(search))
     })
 
     return [...filtered].sort((a, b) => {
@@ -41,7 +48,14 @@ export default function CatalogPage() {
       if (sort === 'name-desc') return b.name.localeCompare(a.name, 'es')
       return 0
     })
-  }, [category, products.data, query, sort])
+  }, [category, color, products.data, query, sort, subcategory, tag])
+
+  const colors = useMemo(() => [...new Set((products.data ?? []).flatMap((product) => (product.color ?? '').split(',').map((item) => item.trim()).filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'es')), [products.data])
+  const tags = useMemo(() => {
+    const unique = new Map()
+    ;(products.data ?? []).flatMap((product) => product.tags ?? []).forEach((item) => unique.set(item.slug, item))
+    return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  }, [products.data])
 
   return (
     <>
@@ -58,7 +72,15 @@ export default function CatalogPage() {
           <CatalogControls
             categories={categories.data ?? []}
             category={category}
-            onCategoryChange={setCategory}
+            onCategoryChange={(value) => { setCategory(value); setSubcategory('') }}
+            subcategory={subcategory}
+            onSubcategoryChange={setSubcategory}
+            color={color}
+            onColorChange={setColor}
+            tag={tag}
+            onTagChange={setTag}
+            colors={colors}
+            tags={tags}
             query={query}
             onQueryChange={setQuery}
             sort={sort}

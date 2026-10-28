@@ -40,6 +40,8 @@ function ProductContent({ product, onBack, returnTo }) {
           </div>
           <AvailabilityBadge availability={product.availability} />
 
+          {product.tags?.length > 0 && <p className="product-tags">{product.tags.map((tag) => <span key={tag.id}>{tag.name}</span>)}</p>}
+
           {product.description && <p className="product-description">{product.description}</p>}
 
           <dl className="product-meta">

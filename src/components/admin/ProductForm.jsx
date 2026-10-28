@@ -9,6 +9,7 @@ const availabilityOptions = [
 
 const emptyProduct = {
   category_id: '',
+  subcategory_id: '',
   sku: '',
   name: '',
   slug: '',
@@ -16,6 +17,7 @@ const emptyProduct = {
   price: '',
   compare_at_price: '',
   material: 'Acero Inoxidable',
+  tags: '',
   color: '',
   size: '',
   attributes: '{}',
@@ -32,6 +34,7 @@ function createInitialValues(product, categories) {
   }
   return {
     category_id: product.category_id ?? '',
+    subcategory_id: product.subcategory_id ?? '',
     sku: product.sku ?? '',
     name: product.name ?? '',
     slug: product.slug ?? '',
@@ -39,6 +42,7 @@ function createInitialValues(product, categories) {
     price: String(product.price ?? ''),
     compare_at_price: product.compare_at_price == null ? '' : String(product.compare_at_price),
     material: product.material ?? '',
+    tags: (product.tags ?? []).map(({ tag }) => tag?.name).filter(Boolean).join(', '),
     color: product.color ?? '',
     size: product.size ?? '',
     attributes: JSON.stringify(product.attributes ?? {}, null, 2),
@@ -99,6 +103,10 @@ export default function ProductForm({ product, categories, submitting, serverErr
     setErrors((current) => ({ ...current, name: undefined, slug: undefined }))
   }
 
+  function handleCategoryChange(categoryId) {
+    setValues((current) => ({ ...current, category_id: categoryId, subcategory_id: '' }))
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
     const validationErrors = validate(values)
@@ -107,6 +115,7 @@ export default function ProductForm({ product, categories, submitting, serverErr
 
     onSubmit({
       category_id: values.category_id || null,
+      subcategory_id: values.subcategory_id || null,
       sku: nullable(values.sku),
       name: toTitleCase(values.name),
       slug: values.slug.trim(),
@@ -114,6 +123,7 @@ export default function ProductForm({ product, categories, submitting, serverErr
       price: Number(values.price),
       compare_at_price: values.compare_at_price === '' ? null : Number(values.compare_at_price),
       material: nullable(values.material),
+      tags: [...new Set(values.tags.split(',').map((tag) => tag.trim()).filter(Boolean))],
       color: nullable(values.color),
       size: nullable(values.size),
       attributes: JSON.parse(values.attributes || '{}'),
@@ -147,9 +157,16 @@ export default function ProductForm({ product, categories, submitting, serverErr
           </div>
           <div className="field">
             <label htmlFor="product-category">Categoría</label>
-            <select id="product-category" value={values.category_id} onChange={(event) => change('category_id', event.target.value)}>
+            <select id="product-category" value={values.category_id} onChange={(event) => handleCategoryChange(event.target.value)}>
               <option value="">Sin categoría</option>
-              {categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.is_active ? '' : ' (inactiva)'}</option>)}
+              {categories.filter((category) => !category.parent_id).map((category) => <option key={category.id} value={category.id}>{category.name}{category.is_active ? '' : ' (inactiva)'}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="product-subcategory">Subcategoría</label>
+            <select id="product-subcategory" value={values.subcategory_id} onChange={(event) => change('subcategory_id', event.target.value)} disabled={!values.category_id}>
+              <option value="">Sin subcategoría</option>
+              {categories.filter((category) => category.parent_id === values.category_id).map((category) => <option key={category.id} value={category.id}>{category.name}{category.is_active ? '' : ' (inactiva)'}</option>)}
             </select>
           </div>
           <div className="field field--wide">
@@ -165,6 +182,7 @@ export default function ProductForm({ product, categories, submitting, serverErr
           <div className="field"><label htmlFor="product-price">Precio *</label><input id="product-price" type="number" min="0" step="0.01" value={values.price} onChange={(event) => change('price', event.target.value)} aria-invalid={Boolean(errors.price)} />{errors.price && <small className="field-error">{errors.price}</small>}</div>
           <div className="field"><label htmlFor="product-compare-price">Precio anterior</label><input id="product-compare-price" type="number" min="0" step="0.01" value={values.compare_at_price} onChange={(event) => change('compare_at_price', event.target.value)} aria-invalid={Boolean(errors.compare_at_price)} />{errors.compare_at_price && <small className="field-error">{errors.compare_at_price}</small>}</div>
           <div className="field"><label htmlFor="product-material">Material</label><input id="product-material" value={values.material} onChange={(event) => change('material', event.target.value)} /></div>
+          <div className="field"><label htmlFor="product-tags">Etiquetas</label><input id="product-tags" value={values.tags} onChange={(event) => change('tags', event.target.value)} placeholder="Ej. regalo, minimalista" /><small className="field-help">Sepáralas con comas.</small></div>
           <div className="field"><label htmlFor="product-color">Color</label><input id="product-color" value={values.color} onChange={(event) => change('color', event.target.value)} /></div>
           <div className="field"><label htmlFor="product-size">Talla</label><input id="product-size" value={values.size} onChange={(event) => change('size', event.target.value)} /></div>
           <div className="field"><label htmlFor="product-availability">Disponibilidad</label><select id="product-availability" value={values.availability} onChange={(event) => change('availability', event.target.value)}>{availabilityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>

@@ -13,7 +13,9 @@ const productFields = `
   attributes,
   availability,
   is_featured,
-  category:categories(id, name, slug),
+  category:categories!products_category_id_fkey(id, name, slug),
+  subcategory:categories!products_subcategory_id_fkey(id, name, slug),
+  tags:product_tags(tag:tags(id, name, slug)),
   images:product_images(id, storage_path, alt_text, sort_order)
 `
 
@@ -25,13 +27,13 @@ function withImageUrls(product) {
       url: supabase.storage.from('product-images').getPublicUrl(image.storage_path).data.publicUrl,
     }))
 
-  return { ...product, images, primaryImage: images[0] ?? null }
+  return { ...product, images, primaryImage: images[0] ?? null, tags: (product.tags ?? []).map(({ tag }) => tag).filter(Boolean) }
 }
 
 export async function getCategories() {
   const { data, error } = await supabase
     .from('categories')
-    .select('id, name, slug, description, sort_order')
+    .select('id, parent_id, name, slug, description, sort_order')
     .order('sort_order', { ascending: true })
 
   if (error) throw error
@@ -55,7 +57,7 @@ export async function getProducts({ featured = false } = {}) {
 export async function getProductsByCategory(slug) {
   const { data, error } = await supabase
     .from('products')
-    .select(productFields.replace('categories(', 'categories!inner('))
+    .select(productFields.replace('categories!products_category_id_fkey(', 'categories!products_category_id_fkey!inner('))
     .eq('is_published', true)
     .eq('categories.slug', slug)
     .order('sort_order', { ascending: true })

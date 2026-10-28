@@ -2,6 +2,14 @@ export default function CatalogControls({
   categories,
   category,
   onCategoryChange,
+  subcategory,
+  onSubcategoryChange,
+  color,
+  onColorChange,
+  tag,
+  onTagChange,
+  colors,
+  tags,
   query,
   onQueryChange,
   sort,
@@ -26,9 +34,32 @@ export default function CatalogControls({
           <span>Categoría</span>
           <select value={category} onChange={(event) => onCategoryChange(event.target.value)}>
             <option value="">Todas</option>
-            {categories.map((item) => (
+            {categories.filter((item) => !item.parent_id).map((item) => (
               <option key={item.id} value={item.slug}>{item.name}</option>
             ))}
+          </select>
+        </label>
+        <label>
+          <span>Subcategoría</span>
+          <select value={subcategory} onChange={(event) => onSubcategoryChange(event.target.value)} disabled={!category}>
+            <option value="">Todas</option>
+            {categories.filter((item) => item.parent_id && (!category || categories.find((parent) => parent.id === item.parent_id)?.slug === category)).map((item) => (
+              <option key={item.id} value={item.slug}>{item.name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Color</span>
+          <select value={color} onChange={(event) => onColorChange(event.target.value)}>
+            <option value="">Todos</option>
+            {colors.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Etiqueta</span>
+          <select value={tag} onChange={(event) => onTagChange(event.target.value)}>
+            <option value="">Todas</option>
+            {tags.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}
           </select>
         </label>
         <label>

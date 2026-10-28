@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 const adminProductFields = `
   id,
   category_id,
+  subcategory_id,
   sku,
   name,
   slug,
@@ -19,7 +20,9 @@ const adminProductFields = `
   sort_order,
   created_at,
   updated_at,
-  category:categories(id, name, slug)
+  category:categories!products_category_id_fkey(id, name, slug),
+  subcategory:categories!products_subcategory_id_fkey(id, name, slug, parent_id),
+  tags:product_tags(tag:tags(id, name, slug))
 `
 
 export async function getAdminProducts() {
@@ -47,7 +50,7 @@ export async function getAdminProductById(id) {
 export async function getAdminCategories() {
   const { data, error } = await supabase
     .from('categories')
-    .select('id, name, slug, is_active, sort_order')
+    .select('id, parent_id, name, slug, is_active, sort_order')
     .order('sort_order', { ascending: true })
 
   if (error) throw error
@@ -55,26 +58,60 @@ export async function getAdminCategories() {
 }
 
 export async function createAdminProduct(product) {
+  const { tags, ...productData } = product
   const { data, error } = await supabase
     .from('products')
-    .insert(product)
+    .insert(productData)
     .select(adminProductFields)
     .single()
 
   if (error) throw error
+  await syncProductTags(data.id, tags)
   return data
 }
 
 export async function updateAdminProduct(id, changes) {
+  const { tags, ...productChanges } = changes
   const { data, error } = await supabase
     .from('products')
-    .update(changes)
+    .update(productChanges)
     .eq('id', id)
     .select(adminProductFields)
     .single()
 
   if (error) throw error
+  if (tags !== undefined) await syncProductTags(id, tags)
   return data
+}
+
+async function syncProductTags(productId, tagNames = []) {
+  const uniqueNames = [...new Map((tagNames ?? []).map((name) => [name.toLocaleLowerCase('es-MX'), name])).values()]
+  const tags = []
+  for (const name of uniqueNames) {
+    const slug = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    if (!slug) continue
+    let { data: tag, error } = await supabase.from('tags').select('id').eq('slug', slug).maybeSingle()
+    if (error) throw error
+    if (!tag) {
+      const result = await supabase.from('tags').insert({ name, slug }).select('id').single()
+      if (result.error) throw result.error
+      tag = result.data
+    }
+    tags.push(tag)
+  }
+  const { error: deleteError } = await supabase.from('product_tags').delete().eq('product_id', productId)
+  if (deleteError) throw deleteError
+  if (!tags.length) return
+  const { error } = await supabase.from('product_tags').insert(tags.map((tag) => ({ product_id: productId, tag_id: tag.id })))
+  if (error) throw error
+}
+
+export async function updateAdminProductsSubcategory(productIds, subcategory) {
+  const { error } = await supabase
+    .from('products')
+    .update({ category_id: subcategory.parent_id, subcategory_id: subcategory.id })
+    .in('id', productIds)
+  if (error) throw error
 }
 
 export async function deleteAdminProduct(id) {

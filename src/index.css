@@ -135,6 +135,10 @@ p { line-height: 1.7; }
 .product-contact { width: 100%; margin-top: 1.75rem; }
 .contact-unavailable { margin: 1.75rem 0 0; padding: 0.8rem 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); font-size: 0.88rem; text-align: center; }
 .product-note { margin: 0.8rem 0 0; color: var(--color-muted); font-size: 0.76rem; text-align: center; }
+.product-tags { display: flex; flex-wrap: wrap; margin: 1rem 0 0; gap: 0.4rem; }
+.product-tags span, .admin-category-detail { color: var(--color-muted); font-size: 0.72rem; }
+.product-tags span { padding: 0.25rem 0.55rem; border-radius: 999px; background: var(--color-surface-soft); }
+.admin-category-detail { display: block; margin-top: 0.2rem; }
 
 .catalog-hero { padding: clamp(4rem, 9vw, 7rem) 0 3rem; background: linear-gradient(120deg, var(--color-surface-soft), var(--color-bg)); }
 .catalog-hero .page-heading { margin-bottom: 0; }
@@ -270,6 +274,8 @@ p { line-height: 1.7; }
 .toggle-field strong { font-size: 0.82rem; }
 .toggle-field small { color: var(--color-muted); font-size: 0.72rem; }
 .admin-form-actions { position: sticky; z-index: 5; bottom: 0; display: flex; padding: 1rem 0; background: linear-gradient(transparent, #f6f3ee 25%); justify-content: flex-end; gap: 0.75rem; }
+.admin-bulk-actions { display: flex; align-items: center; flex-wrap: wrap; margin: 1rem 0; padding: 0.8rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-soft); gap: 0.75rem; }
+.admin-bulk-actions select { min-height: 2.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.3rem; background: white; }
 .image-manager-placeholder > p { margin: 0; color: var(--color-muted); }
 .image-manager__new-product { display: flex; justify-content: flex-end; margin-top: 1.5rem; }
 .image-dropzone { position: relative; display: grid; min-height: 13rem; padding: 1.5rem; border: 1px dashed #c9b8a6; border-radius: var(--radius-md); background: #fcfaf6; text-align: center; transition: 160ms ease; place-items: center; align-content: center; gap: 0.8rem; }
