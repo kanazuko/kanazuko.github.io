@@ -279,6 +279,7 @@ p { line-height: 1.7; }
 .admin-bulk-actions { display: flex; align-items: center; flex-wrap: wrap; margin: 1rem 0; padding: 0.8rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-soft); gap: 0.75rem; }
 .admin-bulk-actions select { min-height: 2.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.3rem; background: white; }
 .admin-settings-grid { display: grid; align-items: start; gap: 1.5rem; }
+.admin-defaults-form { margin-bottom: 1.5rem; }
 .admin-subcategory-list { display: grid; gap: 0.65rem; }
 .admin-subcategory-list article { display: flex; align-items: center; justify-content: space-between; padding: 0.8rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); gap: 1rem; }
 .admin-subcategory-list strong, .admin-subcategory-list small { display: block; }

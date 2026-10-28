@@ -57,6 +57,26 @@ export async function getAdminCategories() {
   return data
 }
 
+export async function getAdminProductDefaults() {
+  const { data, error } = await supabase
+    .from('product_form_defaults')
+    .select('category_id, material, is_published')
+    .eq('id', true)
+    .maybeSingle()
+  if (error) throw error
+  return data ?? { category_id: null, material: '', is_published: true }
+}
+
+export async function updateAdminProductDefaults(defaults) {
+  const { data, error } = await supabase
+    .from('product_form_defaults')
+    .upsert({ id: true, ...defaults })
+    .select('category_id, material, is_published')
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function createAdminSubcategory(subcategory) {
   const { data, error } = await supabase
     .from('categories')

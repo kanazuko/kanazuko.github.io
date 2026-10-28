@@ -16,7 +16,7 @@ const emptyProduct = {
   description: '',
   price: '',
   compare_at_price: '',
-  material: 'Acero Inoxidable',
+  material: '',
   tags: '',
   color: '',
   size: '',
@@ -27,10 +27,9 @@ const emptyProduct = {
   sort_order: '0',
 }
 
-function createInitialValues(product, categories) {
+function createInitialValues(product, categories, defaults) {
   if (!product) {
-    const aretesCategory = categories.find((category) => category.name.trim().toLocaleLowerCase('es-MX') === 'aretes')
-    return { ...emptyProduct, category_id: aretesCategory?.id ?? '' }
+    return { ...emptyProduct, category_id: defaults?.category_id ?? '', material: defaults?.material ?? '', is_published: defaults?.is_published ?? true }
   }
   return {
     category_id: product.category_id ?? '',
@@ -84,8 +83,8 @@ function nullable(value) {
   return trimmed || null
 }
 
-export default function ProductForm({ product, categories, submitting, serverError, onSubmit, onCancel }) {
-  const [values, setValues] = useState(() => createInitialValues(product, categories))
+export default function ProductForm({ product, categories, defaults, submitting, serverError, onSubmit, onCancel }) {
+  const [values, setValues] = useState(() => createInitialValues(product, categories, defaults))
   const [errors, setErrors] = useState({})
   const [slugEdited, setSlugEdited] = useState(Boolean(product?.slug))
 

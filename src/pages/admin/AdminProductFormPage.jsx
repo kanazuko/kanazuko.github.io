@@ -7,6 +7,7 @@ import LoadingState from '../../components/feedback/LoadingState'
 import {
   createAdminProduct,
   getAdminCategories,
+  getAdminProductDefaults,
   getAdminProductById,
   getProductMutationError,
   updateAdminProduct,
@@ -18,6 +19,7 @@ export default function AdminProductFormPage() {
   const navigate = useNavigate()
   const [product, setProduct] = useState(null)
   const [categories, setCategories] = useState([])
+  const [defaults, setDefaults] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [serverError, setServerError] = useState('')
@@ -28,13 +30,15 @@ export default function AdminProductFormPage() {
 
     async function load() {
       try {
-        const [categoryData, productData] = await Promise.all([
+        const [categoryData, productData, defaultData] = await Promise.all([
           getAdminCategories(),
           editing ? getAdminProductById(id) : Promise.resolve(null),
+          getAdminProductDefaults(),
         ])
         if (active) {
           setCategories(categoryData)
           setProduct(productData)
+          setDefaults(defaultData)
         }
       } catch (error) {
         console.error(error)
@@ -83,6 +87,7 @@ export default function AdminProductFormPage() {
         key={editing ? id : 'new'}
         product={editing ? product : null}
         categories={categories}
+        defaults={defaults}
         submitting={submitting}
         serverError={serverError}
         onSubmit={handleSubmit}

@@ -7,7 +7,9 @@ import {
   createAdminSubcategory,
   deleteAdminSubcategory,
   getAdminCategories,
+  getAdminProductDefaults,
   updateAdminSubcategory,
+  updateAdminProductDefaults,
 } from '../../services/adminProductService'
 import { slugify, toTitleCase } from '../../utils/formatters'
 
@@ -22,11 +24,14 @@ export default function AdminSettingsPage() {
   const [error, setError] = useState('')
   const [notification, setNotification] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [defaults, setDefaults] = useState({ category_id: '', material: '', is_published: true })
 
   async function load(showLoading = false) {
     if (showLoading) setLoading(true)
     try {
-      setCategories(await getAdminCategories())
+      const [categoryData, defaultData] = await Promise.all([getAdminCategories(), getAdminProductDefaults()])
+      setCategories(categoryData)
+      setDefaults({ category_id: defaultData.category_id ?? '', material: defaultData.material ?? '', is_published: defaultData.is_published })
     } catch (loadError) {
       console.error(loadError)
       setError('No fue posible cargar la configuración de categorías.')
@@ -57,6 +62,21 @@ export default function AdminSettingsPage() {
     setEditingId(null)
     setValues(emptyValues)
     setError('')
+  }
+
+  async function handleDefaultsSubmit(event) {
+    event.preventDefault()
+    setSaving(true)
+    try {
+      const saved = await updateAdminProductDefaults({ category_id: defaults.category_id || null, material: defaults.material.trim() || null, is_published: defaults.is_published })
+      setDefaults({ category_id: saved.category_id ?? '', material: saved.material ?? '', is_published: saved.is_published })
+      setNotification({ type: 'success', message: 'Prellenado para nuevos productos actualizado.' })
+    } catch (saveError) {
+      console.error(saveError)
+      setNotification({ type: 'error', message: saveError.message || 'No fue posible guardar el prellenado.' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleSubmit(event) {
@@ -104,6 +124,15 @@ export default function AdminSettingsPage() {
     <div className="admin-page admin-page--settings">
       <header className="admin-page__header"><div><p className="eyebrow">Catálogo</p><h1>Configuración</h1><p>Administra las subcategorías disponibles al crear y clasificar productos.</p></div></header>
       <Notification type={notification?.type} message={notification?.message} onDismiss={() => setNotification(null)} />
+      <form className="admin-form-section admin-defaults-form" onSubmit={handleDefaultsSubmit}>
+        <div className="admin-form-section__heading"><h2>Prellenado de productos nuevos</h2><p>Estos valores aparecerán automáticamente al abrir el formulario para crear una pieza.</p></div>
+        <div className="admin-form-grid">
+          <div className="field"><label htmlFor="default-category">Categoría</label><select id="default-category" value={defaults.category_id} onChange={(event) => setDefaults((current) => ({ ...current, category_id: event.target.value }))}><option value="">Sin categoría</option>{parents.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+          <div className="field"><label htmlFor="default-material">Material</label><input id="default-material" value={defaults.material} onChange={(event) => setDefaults((current) => ({ ...current, material: event.target.value }))} placeholder="Ej. Acero Inoxidable" /></div>
+          <label className="toggle-field"><input type="checkbox" checked={defaults.is_published} onChange={(event) => setDefaults((current) => ({ ...current, is_published: event.target.checked }))} /><span><strong>Publicado</strong><small>Los nuevos productos se crearán visibles en el catálogo.</small></span></label>
+        </div>
+        <div className="admin-form-actions"><button className="admin-button" disabled={saving}>{saving ? 'Guardando…' : 'Guardar prellenado'}</button></div>
+      </form>
       <section className="admin-settings-grid">
         <form className="admin-form-section" onSubmit={handleSubmit}>
           <div className="admin-form-section__heading"><h2>{editingId ? 'Editar subcategoría' : 'Nueva subcategoría'}</h2><p>Las categorías principales se mantienen como la estructura del catálogo.</p></div>
