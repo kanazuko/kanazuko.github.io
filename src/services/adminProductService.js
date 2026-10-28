@@ -60,18 +60,18 @@ export async function getAdminCategories() {
 export async function getAdminProductDefaults() {
   const { data, error } = await supabase
     .from('product_form_defaults')
-    .select('category_id, material, is_published')
+    .select('category_id, subcategory_id, material, color, is_published')
     .eq('id', true)
     .maybeSingle()
   if (error) throw error
-  return data ?? { category_id: null, material: '', is_published: true }
+  return data ?? { category_id: null, subcategory_id: null, material: '', color: '', is_published: true }
 }
 
 export async function updateAdminProductDefaults(defaults) {
   const { data, error } = await supabase
     .from('product_form_defaults')
     .upsert({ id: true, ...defaults })
-    .select('category_id, material, is_published')
+    .select('category_id, subcategory_id, material, color, is_published')
     .single()
   if (error) throw error
   return data

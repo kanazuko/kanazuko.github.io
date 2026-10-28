@@ -29,7 +29,7 @@ const emptyProduct = {
 
 function createInitialValues(product, categories, defaults) {
   if (!product) {
-    return { ...emptyProduct, category_id: defaults?.category_id ?? '', material: defaults?.material ?? '', is_published: defaults?.is_published ?? true }
+    return { ...emptyProduct, category_id: defaults?.category_id ?? '', subcategory_id: defaults?.subcategory_id ?? '', material: defaults?.material ?? '', color: defaults?.color ?? '', is_published: defaults?.is_published ?? true }
   }
   return {
     category_id: product.category_id ?? '',

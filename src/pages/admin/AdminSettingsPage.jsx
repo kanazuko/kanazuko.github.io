@@ -24,14 +24,14 @@ export default function AdminSettingsPage() {
   const [error, setError] = useState('')
   const [notification, setNotification] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [defaults, setDefaults] = useState({ category_id: '', material: '', is_published: true })
+  const [defaults, setDefaults] = useState({ category_id: '', subcategory_id: '', material: '', color: '', is_published: true })
 
   async function load(showLoading = false) {
     if (showLoading) setLoading(true)
     try {
       const [categoryData, defaultData] = await Promise.all([getAdminCategories(), getAdminProductDefaults()])
       setCategories(categoryData)
-      setDefaults({ category_id: defaultData.category_id ?? '', material: defaultData.material ?? '', is_published: defaultData.is_published })
+      setDefaults({ category_id: defaultData.category_id ?? '', subcategory_id: defaultData.subcategory_id ?? '', material: defaultData.material ?? '', color: defaultData.color ?? '', is_published: defaultData.is_published })
     } catch (loadError) {
       console.error(loadError)
       setError('No fue posible cargar la configuración de categorías.')
@@ -68,8 +68,8 @@ export default function AdminSettingsPage() {
     event.preventDefault()
     setSaving(true)
     try {
-      const saved = await updateAdminProductDefaults({ category_id: defaults.category_id || null, material: defaults.material.trim() || null, is_published: defaults.is_published })
-      setDefaults({ category_id: saved.category_id ?? '', material: saved.material ?? '', is_published: saved.is_published })
+      const saved = await updateAdminProductDefaults({ category_id: defaults.category_id || null, subcategory_id: defaults.subcategory_id || null, material: defaults.material.trim() || null, color: defaults.color.trim() || null, is_published: defaults.is_published })
+      setDefaults({ category_id: saved.category_id ?? '', subcategory_id: saved.subcategory_id ?? '', material: saved.material ?? '', color: saved.color ?? '', is_published: saved.is_published })
       setNotification({ type: 'success', message: 'Prellenado para nuevos productos actualizado.' })
     } catch (saveError) {
       console.error(saveError)
@@ -127,8 +127,10 @@ export default function AdminSettingsPage() {
       <form className="admin-form-section admin-defaults-form" onSubmit={handleDefaultsSubmit}>
         <div className="admin-form-section__heading"><h2>Prellenado de productos nuevos</h2><p>Estos valores aparecerán automáticamente al abrir el formulario para crear una pieza.</p></div>
         <div className="admin-form-grid">
-          <div className="field"><label htmlFor="default-category">Categoría</label><select id="default-category" value={defaults.category_id} onChange={(event) => setDefaults((current) => ({ ...current, category_id: event.target.value }))}><option value="">Sin categoría</option>{parents.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+          <div className="field"><label htmlFor="default-category">Categoría</label><select id="default-category" value={defaults.category_id} onChange={(event) => setDefaults((current) => ({ ...current, category_id: event.target.value, subcategory_id: '' }))}><option value="">Sin categoría</option>{parents.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+          <div className="field"><label htmlFor="default-subcategory">Subcategoría</label><select id="default-subcategory" value={defaults.subcategory_id} onChange={(event) => setDefaults((current) => ({ ...current, subcategory_id: event.target.value }))} disabled={!defaults.category_id}><option value="">Sin subcategoría</option>{subcategories.filter((category) => category.parent_id === defaults.category_id).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
           <div className="field"><label htmlFor="default-material">Material</label><input id="default-material" value={defaults.material} onChange={(event) => setDefaults((current) => ({ ...current, material: event.target.value }))} placeholder="Ej. Acero Inoxidable" /></div>
+          <div className="field"><label htmlFor="default-color">Color</label><input id="default-color" value={defaults.color} onChange={(event) => setDefaults((current) => ({ ...current, color: event.target.value }))} placeholder="Ej. Dorado" /></div>
           <label className="toggle-field"><input type="checkbox" checked={defaults.is_published} onChange={(event) => setDefaults((current) => ({ ...current, is_published: event.target.checked }))} /><span><strong>Publicado</strong><small>Los nuevos productos se crearán visibles en el catálogo.</small></span></label>
         </div>
         <div className="admin-form-actions"><button className="admin-button" disabled={saving}>{saving ? 'Guardando…' : 'Guardar prellenado'}</button></div>
