@@ -43,7 +43,7 @@ export default function HomePage() {
         {categories.data?.length === 0 && <EmptyState message="Aún no hay categorías disponibles." />}
         {categories.data?.length > 0 && (
           <div className="category-grid">
-            {categories.data.map((category) => <CategoryCard key={category.id} category={category} />)}
+            {categories.data.filter((category) => !category.parent_id).map((category) => <CategoryCard key={category.id} category={category} />)}
           </div>
         )}
       </section>

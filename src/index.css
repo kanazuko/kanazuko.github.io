@@ -94,6 +94,8 @@ p { line-height: 1.7; }
 .category-card:hover { border-color: #cdbba9; box-shadow: var(--shadow-sm); transform: translateY(-3px); }
 .category-card h3 { margin: 1rem 0 0.5rem; font-size: 1.8rem; }
 .category-card p { color: var(--color-muted); }
+.category-subcategories { margin-bottom: clamp(3rem, 7vw, 5rem); }
+.category-subcategories .section-heading { margin-bottom: 1.25rem; }
 
 .product-grid { display: grid; grid-template-columns: 1fr; gap: 2rem 1rem; }
 .product-card { min-width: 0; }

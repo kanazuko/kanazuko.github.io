@@ -55,11 +55,20 @@ export async function getProducts({ featured = false } = {}) {
 }
 
 export async function getProductsByCategory(slug) {
+  const { data: category, error: categoryError } = await supabase
+    .from('categories')
+    .select('id, parent_id')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (categoryError) throw categoryError
+  if (!category) return []
+
   const { data, error } = await supabase
     .from('products')
-    .select(productFields.replace('categories!products_category_id_fkey(', 'categories!products_category_id_fkey!inner('))
+    .select(productFields)
     .eq('is_published', true)
-    .eq('categories.slug', slug)
+    .eq(category.parent_id ? 'subcategory_id' : 'category_id', category.id)
     .order('sort_order', { ascending: true })
 
   if (error) throw error
