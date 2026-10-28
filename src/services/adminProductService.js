@@ -57,6 +57,39 @@ export async function getAdminCategories() {
   return data
 }
 
+export async function createAdminSubcategory(subcategory) {
+  const { data, error } = await supabase
+    .from('categories')
+    .insert(subcategory)
+    .select('id, parent_id, name, slug, is_active, sort_order')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateAdminSubcategory(id, changes) {
+  const { data, error } = await supabase
+    .from('categories')
+    .update(changes)
+    .eq('id', id)
+    .select('id, parent_id, name, slug, is_active, sort_order')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteAdminSubcategory(id) {
+  const { count, error: countError } = await supabase
+    .from('products')
+    .select('id', { count: 'exact', head: true })
+    .eq('subcategory_id', id)
+  if (countError) throw countError
+  if (count) throw new Error('No puedes eliminar esta subcategoría porque tiene productos asignados.')
+
+  const { error } = await supabase.from('categories').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createAdminProduct(product) {
   const { tags, ...productData } = product
   const { data, error } = await supabase

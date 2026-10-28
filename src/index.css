@@ -276,6 +276,14 @@ p { line-height: 1.7; }
 .admin-form-actions { position: sticky; z-index: 5; bottom: 0; display: flex; padding: 1rem 0; background: linear-gradient(transparent, #f6f3ee 25%); justify-content: flex-end; gap: 0.75rem; }
 .admin-bulk-actions { display: flex; align-items: center; flex-wrap: wrap; margin: 1rem 0; padding: 0.8rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-soft); gap: 0.75rem; }
 .admin-bulk-actions select { min-height: 2.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.3rem; background: white; }
+.admin-settings-grid { display: grid; align-items: start; gap: 1.5rem; }
+.admin-subcategory-list { display: grid; gap: 0.65rem; }
+.admin-subcategory-list article { display: flex; align-items: center; justify-content: space-between; padding: 0.8rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); gap: 1rem; }
+.admin-subcategory-list strong, .admin-subcategory-list small { display: block; }
+.admin-subcategory-list small { margin-top: 0.2rem; color: var(--color-muted); font-size: 0.72rem; }
+.admin-subcategory-list article > div:last-child { display: flex; gap: 0.65rem; }
+.admin-subcategory-list button { padding: 0; border: 0; background: transparent; color: var(--color-accent); cursor: pointer; font-size: 0.78rem; }
+.admin-subcategory-list .danger-link { color: #98483f; }
 .image-manager-placeholder > p { margin: 0; color: var(--color-muted); }
 .image-manager__new-product { display: flex; justify-content: flex-end; margin-top: 1.5rem; }
 .image-dropzone { position: relative; display: grid; min-height: 13rem; padding: 1.5rem; border: 1px dashed #c9b8a6; border-radius: var(--radius-md); background: #fcfaf6; text-align: center; transition: 160ms ease; place-items: center; align-content: center; gap: 0.8rem; }

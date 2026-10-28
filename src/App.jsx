@@ -12,6 +12,7 @@ const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'))
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'))
 const AdminProductsPage = lazy(() => import('./pages/admin/AdminProductsPage'))
 const AdminProductFormPage = lazy(() => import('./pages/admin/AdminProductFormPage'))
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'))
 const AdminLayout = lazy(() => import('./layouts/AdminLayout'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="productos" element={<AdminProductsPage />} />
             <Route path="productos/nuevo" element={<AdminProductFormPage />} />
             <Route path="productos/:id/editar" element={<AdminProductFormPage />} />
+            <Route path="configuracion" element={<AdminSettingsPage />} />
           </Route>
         </Route>
 
