@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ParentCategorySettings from '../../components/admin/ParentCategorySettings'
 import ConfirmDialog from '../../components/feedback/ConfirmDialog'
 import ErrorState from '../../components/feedback/ErrorState'
 import LoadingState from '../../components/feedback/LoadingState'
@@ -122,8 +123,16 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="admin-page admin-page--settings">
-      <header className="admin-page__header"><div><p className="eyebrow">Catálogo</p><h1>Configuración</h1><p>Administra las subcategorías disponibles al crear y clasificar productos.</p></div></header>
+      <header className="admin-page__header"><div><p className="eyebrow">Catálogo</p><h1>Configuración</h1><p>Administra las categorías padre y subcategorías disponibles al crear y clasificar productos.</p></div></header>
       <Notification type={notification?.type} message={notification?.message} onDismiss={() => setNotification(null)} />
+      {loading ? <LoadingState label="Cargando categorías padre…" /> : (
+        <ParentCategorySettings
+          categories={parents}
+          disabled={saving || Boolean(error && !categories.length)}
+          onSaved={(saved) => setCategories((current) => [...current.filter((category) => category.id !== saved.id), saved].sort((a, b) => a.sort_order - b.sort_order))}
+          onNotify={setNotification}
+        />
+      )}
       <form className="admin-form-section admin-defaults-form" onSubmit={handleDefaultsSubmit}>
         <div className="admin-form-section__heading"><h2>Prellenado de productos nuevos</h2><p>Estos valores aparecerán automáticamente al abrir el formulario para crear una pieza.</p></div>
         <div className="admin-form-grid">
@@ -137,7 +146,7 @@ export default function AdminSettingsPage() {
       </form>
       <section className="admin-settings-grid">
         <form className="admin-form-section" onSubmit={handleSubmit}>
-          <div className="admin-form-section__heading"><h2>{editingId ? 'Editar subcategoría' : 'Nueva subcategoría'}</h2><p>Las categorías principales se mantienen como la estructura del catálogo.</p></div>
+          <div className="admin-form-section__heading"><h2>{editingId ? 'Editar subcategoría' : 'Nueva subcategoría'}</h2><p>Asigna cada subcategoría a una categoría padre.</p></div>
           <div className="admin-form-grid">
             <div className="field"><label htmlFor="subcategory-parent">Categoría principal *</label><select id="subcategory-parent" value={values.parent_id} onChange={(event) => change('parent_id', event.target.value)}><option value="">Selecciona una categoría</option>{parents.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
             <div className="field"><label htmlFor="subcategory-name">Nombre *</label><input id="subcategory-name" value={values.name} onChange={(event) => { change('name', event.target.value); if (!editingId) change('slug', slugify(event.target.value)) }} /></div>

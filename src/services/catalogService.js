@@ -34,6 +34,7 @@ export async function getCategories() {
   const { data, error } = await supabase
     .from('categories')
     .select('id, parent_id, name, slug, description, sort_order')
+    .eq('is_active', true)
     .order('sort_order', { ascending: true })
 
   if (error) throw error
@@ -59,6 +60,7 @@ export async function getProductsByCategory(slug) {
     .from('categories')
     .select('id, parent_id')
     .eq('slug', slug)
+    .eq('is_active', true)
     .maybeSingle()
 
   if (categoryError) throw categoryError

@@ -77,6 +77,22 @@ export async function updateAdminProductDefaults(defaults) {
   return data
 }
 
+export async function createAdminCategory(category) {
+  return createAdminSubcategory({ ...category, parent_id: null })
+}
+
+export async function updateAdminCategory(id, changes) {
+  const { data, error } = await supabase
+    .from('categories')
+    .update({ ...changes, parent_id: null })
+    .eq('id', id)
+    .is('parent_id', null)
+    .select('id, parent_id, name, slug, is_active, sort_order')
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function createAdminSubcategory(subcategory) {
   const { data, error } = await supabase
     .from('categories')
