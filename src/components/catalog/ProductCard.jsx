@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { formatAvailability, formatCurrency } from '../../utils/formatters'
 import { saveScrollPosition } from '../../hooks/useScrollPosition'
 import SafeImage from './SafeImage'
+import AddToCartButton from './AddToCartButton'
 
 export default function ProductCard({ product }) {
   const location = useLocation()
@@ -36,6 +37,7 @@ export default function ProductCard({ product }) {
             {formatAvailability(product.availability)}
           </span>
         </div>
+        <AddToCartButton product={product} />
       </div>
     </article>
   )

@@ -55,6 +55,13 @@ export async function getProducts({ featured = false } = {}) {
   return data.map(withImageUrls)
 }
 
+export async function getCartProducts(ids) {
+  if (!ids.length) return []
+  const { data, error } = await supabase.from('products').select(productFields).in('id', ids).eq('is_published', true)
+  if (error) throw error
+  return data.map(withImageUrls)
+}
+
 export async function getProductsByCategory(slug) {
   const { data: category, error: categoryError } = await supabase
     .from('categories')

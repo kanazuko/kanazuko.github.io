@@ -8,6 +8,8 @@ const HomePage = lazy(() => import('./pages/HomePage'))
 const CatalogPage = lazy(() => import('./pages/CatalogPage'))
 const CategoryPage = lazy(() => import('./pages/CategoryPage'))
 const ProductPage = lazy(() => import('./pages/ProductPage'))
+const CartPage = lazy(() => import('./pages/CartPage'))
+const AdminOrdersPage = lazy(() => import('./pages/admin/AdminOrdersPage'))
 const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'))
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'))
 const AdminProductsPage = lazy(() => import('./pages/admin/AdminProductsPage'))
@@ -25,6 +27,7 @@ export default function App() {
           <Route path="catalogo" element={<CatalogPage />} />
           <Route path="categoria/:slug" element={<CategoryPage />} />
           <Route path="producto/:slug" element={<ProductPage />} />
+          <Route path="carrito" element={<CartPage />} />
         </Route>
 
         <Route path="admin/login" element={<AdminLoginPage />} />
@@ -35,6 +38,7 @@ export default function App() {
             <Route path="productos/nuevo" element={<AdminProductFormPage />} />
             <Route path="productos/:id/editar" element={<AdminProductFormPage />} />
             <Route path="configuracion" element={<AdminSettingsPage />} />
+            <Route path="pedidos" element={<AdminOrdersPage />} />
           </Route>
         </Route>
 

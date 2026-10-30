@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Navigation from './Navigation'
+import { useCart } from '../../hooks/useCart'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { count } = useCart()
 
   return (
     <header className="site-header">
@@ -11,6 +13,7 @@ export default function Header() {
         <Link className="brand" to="/" aria-label="PRArtJewelry, inicio">
           PR<span>Art</span>Jewelry
         </Link>
+        <Link className="cart-link" to="/carrito" onClick={() => setMenuOpen(false)} aria-label={`Carrito, ${count} productos`}>Carrito <span>{count}</span></Link>
         <button
           className="menu-toggle"
           type="button"

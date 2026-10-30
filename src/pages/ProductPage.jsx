@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import AvailabilityBadge from '../components/catalog/AvailabilityBadge'
+import AddToCartButton from '../components/catalog/AddToCartButton'
 import ProductGallery from '../components/catalog/ProductGallery'
 import ProductGrid from '../components/catalog/ProductGrid'
 import ErrorState from '../components/feedback/ErrorState'
@@ -56,6 +57,7 @@ function ProductContent({ product, onBack, returnTo }) {
             ))}
           </dl>
 
+          <AddToCartButton product={product} />
           {whatsappUrl ? (
             <a className="button product-contact" href={whatsappUrl} target="_blank" rel="noreferrer">
               Consultar por WhatsApp

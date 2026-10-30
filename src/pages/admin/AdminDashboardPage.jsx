@@ -18,6 +18,12 @@ export default function AdminDashboardPage() {
           <Link className="admin-button" to="/admin/productos">Ver productos</Link>
         </section>
         <section className="admin-panel">
+          <p className="eyebrow">Pedidos</p>
+          <h2>Organiza las entregas</h2>
+          <p>Revisa las solicitudes de tus clientes y las piezas pendientes de comprar.</p>
+          <Link className="admin-button" to="/admin/pedidos">Ver pedidos</Link>
+        </section>
+        <section className="admin-panel">
           <p className="admin-panel__label">Estado</p>
           <strong>Sesión verificada</strong>
           <p>Tu cuenta pertenece a la lista de administradores autorizados.</p>
