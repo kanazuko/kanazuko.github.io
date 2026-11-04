@@ -7,6 +7,9 @@ project_id = "kanazuko.github.io"
 [functions.order-confirmation]
 verify_jwt = false
 
+[functions.instagram-status]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

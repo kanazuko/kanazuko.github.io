@@ -36,6 +36,7 @@ export default function AdminLayout() {
             <span aria-hidden="true">⚙</span> Configuración
           </NavLink>
           <NavLink to="/admin/pedidos"><span aria-hidden="true">▤</span> Pedidos</NavLink>
+          <NavLink to="/admin/instagram"><span aria-hidden="true">◎</span> Instagram</NavLink>
         </nav>
         <div className="admin-account">
           <span className="admin-account__avatar" aria-hidden="true">
