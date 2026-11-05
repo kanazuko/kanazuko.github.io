@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [authorizationStatus, setAuthorizationStatus] = useState('checking')
   const [authorizationError, setAuthorizationError] = useState(null)
   const [verifiedUserId, setVerifiedUserId] = useState(null)
+  const userId = session?.user?.id
 
   useEffect(() => {
     let active = true
@@ -42,7 +43,6 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true
-    const userId = session?.user?.id
 
     if (!userId) {
       Promise.resolve().then(() => {
@@ -79,7 +79,10 @@ export function AuthProvider({ children }) {
     return () => {
       active = false
     }
-  }, [session])
+    // Session refreshes and tab-return events must not unmount the admin forms.
+    // Recheck authorization when the identity changes; server policies still
+    // enforce permissions on every request.
+  }, [userId])
 
   const user = session?.user ?? null
   const loading =

@@ -80,6 +80,25 @@ try {
   await page.getByRole('button', { name: 'Subir foto 2' }).click()
   await page.getByRole('button', { name: 'Generar descripción' }).click()
   assert.match(await page.getByLabel('Descripción editable').inputValue(), /Acero dorado/)
+  const unsavedCaption = await page.getByLabel('Descripción editable').inputValue()
+  const catalogLoads = remoteCalls.filter(path => path === '/rest/v1/products').length
+  // Exercise Supabase's actual tab-return handler and wait for its session event.
+  await page.evaluate(async () => {
+    const { supabase } = await import('/src/lib/supabase.js')
+    await new Promise(resolve => {
+      const { data } = supabase.auth.onAuthStateChange(event => {
+        if (event !== 'SIGNED_IN') return
+        data.subscription.unsubscribe()
+        setTimeout(resolve, 100)
+      })
+      window.dispatchEvent(new Event('visibilitychange'))
+    })
+  })
+  assert.equal(await page.getByLabel('Descripción editable').inputValue(), unsavedCaption, 'returning to the tab must preserve unsaved text')
+  assert.equal(await page.getByRole('combobox').inputValue(), 'carousel')
+  assert.equal(await page.getByLabel('Seleccionar foto').nth(0).isChecked(), true)
+  assert.equal(await page.getByLabel('Seleccionar foto').nth(1).isChecked(), true)
+  assert.equal(remoteCalls.filter(path => path === '/rest/v1/products').length, catalogLoads, 'tab return must not remount the editor')
   await page.getByRole('button', { name: 'Guardar borrador' }).click()
   await page.getByText('Borrador guardado. No se envió contenido a Instagram.').waitFor()
   assert.deepEqual(draft.image_ids, [photos[1].id, photos[0].id])
