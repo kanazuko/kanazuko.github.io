@@ -1,13 +1,6 @@
-import { authenticate, cors, json, safeFailure } from '../_shared/instagram.ts'
+import { createPublishHandler } from './handler.ts'
 
-// Deliberate source-code gate for this stage. No request field, environment variable,
-// database write or browser modification can enable publication. A subsequent reviewed
-// implementation requires explicit administrator confirmation and a persisted attempt.
-Deno.serve(async (request: Request) => {
-  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
-  if (request.method !== 'POST') return json({ error: { code: 'METHOD_NOT_ALLOWED' } }, 405)
-  try {
-    await authenticate(request)
-    return json({ error: { code: 'PUBLISHING_DISABLED' } }, 423)
-  } catch (error) { return safeFailure(error) }
-})
+// Remains null until the owner authorizes a specific prepared draft.
+// Activation requires a reviewed source change: ID, revision and account ID.
+// No environment variable or request parameter enables publication.
+Deno.serve(createPublishHandler(null))

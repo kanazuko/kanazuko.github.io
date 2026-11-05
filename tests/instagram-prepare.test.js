@@ -128,6 +128,19 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
       assert.equal((await result.json()).error.code, 'PUBLISHING_DISABLED')
       assert.equal(calls.filter(({ url }) => url.hostname === 'graph.facebook.com').length, before)
     })
+    await t.test('publication review reads the persisted revision without touching Meta or changing it', async () => {
+      const snapshot = JSON.stringify(row)
+      const before = calls.filter(({ url }) => url.hostname === 'graph.facebook.com').length
+      const result = await publishHandler(request('review'))
+      assert.equal(result.status, 200)
+      const { review } = await result.json()
+      assert.equal(review.publishing_enabled, false)
+      assert.equal(review.caption, row.caption)
+      assert.match(review.digest, /^[a-f0-9]{64}$/)
+      assert.equal(JSON.stringify(row), snapshot)
+      assert.equal(calls.filter(({ url }) => url.hostname === 'graph.facebook.com').length, before)
+      assert.equal((await publishHandler(request('review', undefined, 'Bearer session', 99))).status, 409)
+    })
     await t.test('permission audit is read-only and rejects an account change', async () => {
       const before = structuredClone(row)
       const mutationCount = () => calls.filter(({ options }) => options.method === 'PATCH' || options.method === 'POST' || options.method === 'DELETE').length

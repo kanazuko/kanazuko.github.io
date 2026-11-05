@@ -2,7 +2,7 @@
 
 Consulta también la [auditoría funcional y de seguridad](instagram-audit.md), con evidencia de PostgreSQL Cloud, validación de los archivos públicos y los pasos pendientes antes de publicar.
 
-Esta etapa implementa selección de productos/fotos, orden, descripción, vista previa, guardado y preparación de imágenes con comprobación de acceso a publicación. **No publica contenido.** `instagram-publish` autentica y autoriza, pero responde siempre `423 PUBLISHING_DISABLED`. No hay una variable de entorno ni un parámetro de petición que quite el bloqueo.
+Esta etapa implementa selección de productos/fotos, orden, descripción, vista previa, guardado y preparación de imágenes con comprobación de acceso a publicación. **No publica contenido.** En su configuración actual, `instagram-publish` permite únicamente una revisión autenticada de la versión preparada (`action=review`); cualquier intento de envío responde `423 PUBLISHING_DISABLED`. No hay una variable de entorno ni un parámetro de petición que quite el bloqueo. El [motor de publicación y sus límites de activación](instagram-publication.md) ya tienen pruebas simuladas y requieren una autorización de prueba concreta en código antes de activarse.
 
 ## Preparación y despliegue
 
@@ -15,7 +15,7 @@ npx supabase functions deploy instagram-prepare --use-api
 npx supabase functions deploy instagram-publish --use-api
 ```
 
-Revisa el dry-run antes del push: la nueva migración es `20261104120000_instagram_drafts.sql`. No se modifican migraciones anteriores. Estos comandos **no se ejecutaron contra Cloud durante el desarrollo**. El frontend se prueba con `npm run dev`; publicar el sitio sigue el procedimiento habitual de GitHub Pages.
+Revisa el dry-run antes del push. La migración original es `20261104120000_instagram_drafts.sql`; el nuevo registro de progreso se añade en `20261105010000_instagram_publish_progress.sql`. No se modifican migraciones anteriores. Estos comandos **no se ejecutaron contra Cloud durante este desarrollo**. El frontend se prueba con `npm run dev`; publicar el sitio sigue el procedimiento habitual de GitHub Pages.
 
 Mantén `verify_jwt = true` en las tres funciones de Instagram. No uses `--no-verify-jwt`. La función existente `instagram-status` no cambia y no hace falta desplegarla nuevamente.
 
@@ -79,12 +79,12 @@ El historial muestra los 50 registros más recientes. Se puede abrir un borrador
 - Auth verifica el JWT en servidor; se rechazan sesiones anónimas y usuarios fuera de `public.admin_users` antes de leer secretos o realizar operaciones privilegiadas. Se mantiene la comprobación JWT del gateway.
 - RLS restringe la lectura del historial a administradores. La escritura desde el cliente se realiza solo por `save_instagram_draft`, con autorización administrativa explícita, validación de IDs, bloqueo transaccional y revisión esperada. Un reintento idéntico tras perder una respuesta no crea otro borrador.
 - Estados, manifiestos, IDs de Meta y fechas de publicación son de gestión exclusiva del backend. Las transiciones usan comparación atómica de ID/revisión/estado/fecha; dos solicitudes simultáneas no adquieren el mismo trabajo.
-- Solo hay solicitudes **GET** a Meta. Se rechazan redirecciones; los tokens van en encabezados, nunca en query strings, respuestas o logs. Los errores se traducen a códigos propios. React muestra el texto como texto, sin HTML inyectado.
+- Las rutas desplegables solo permiten solicitudes **GET** a Meta. El motor aislado contiene las futuras operaciones POST, pero ninguna petición al endpoint puede ejecutarlas. Se rechazan redirecciones; los tokens van en encabezados, nunca en query strings, respuestas o logs. Los errores se traducen a códigos propios. React muestra el texto como texto, sin HTML inyectado.
 - El botón deshabilitado es informativo: el bloqueo real está también en `instagram-publish`, que devuelve 423 incluso si alguien manipula el navegador o envía `confirmed: true`.
 
 ## Etapa posterior: publicación explícita
 
-La creación de contenedores, consulta de su estado y `POST /{account-id}/media_publish` se incorporarán en la etapa que autorices. **No hay un motor de publicación activo u oculto tras un flag en esta entrega.** Por eso no existe posibilidad de publicar dos veces en esta fase.
+El motor aislado implementa creación de contenedores, consulta de su estado y `POST /{account-id}/media_publish`, con pruebas que simulan toda la red. **No hay un motor de publicación activo u oculto tras un flag en esta entrega.** El endpoint no lo invoca. Consulta [publicación y activación](instagram-publication.md) antes de habilitar una prueba real.
 
 El esquema reserva `container_id`, `publish_attempt_id` único, `publish_started_at`, `instagram_id` único, `instagram_url`, `published_at`, `publish_unknown` y estados de resultado. Antes de habilitar el envío se necesita:
 

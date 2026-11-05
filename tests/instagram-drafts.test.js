@@ -46,6 +46,7 @@ test('Instagram SQL drafts: snapshots, RLS, immutable server state and optimisti
       CREATE TABLE storage.objects(id uuid, bucket_id text); ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;`)
     await db.exec(await readFile(new URL('../supabase/migrations/20261026214609_initial_schema.sql', import.meta.url), 'utf8'))
     await db.exec(await readFile(new URL('../supabase/migrations/20261104120000_instagram_drafts.sql', import.meta.url), 'utf8'))
+    await db.exec(await readFile(new URL('../supabase/migrations/20261105010000_instagram_publish_progress.sql', import.meta.url), 'utf8'))
     await db.query('INSERT INTO auth.users VALUES ($1), ($2)', [admin, user])
     await db.query('INSERT INTO admin_users(user_id) VALUES ($1)', [admin])
     await db.query("INSERT INTO products(id,name,slug,price) VALUES ($1,'Anillo','anillo',125)", [product])
@@ -61,6 +62,8 @@ test('Instagram SQL drafts: snapshots, RLS, immutable server state and optimisti
     await assert.rejects(asRole('anon', '', 'SELECT * FROM instagram_posts'), /permission denied/)
     const first = (await save()).rows[0]
     assert.equal(first.status, 'draft')
+    assert.deepEqual(first.publish_progress, {})
+    await assert.rejects(asRole('authenticated', admin, `UPDATE instagram_posts SET publish_progress='{"phase":"ready"}'`), /permission denied/)
     assert.equal(first.products[0].price, 125)
     assert.equal(first.images[0].storage_path, `products/${product}/foto.webp`)
     assert.equal((await save()).rows[0].revision, 1)

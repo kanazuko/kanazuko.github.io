@@ -47,6 +47,11 @@ try {
       draft = structuredClone({ id: input.p_id, revision: input.p_revision + 1, mode: input.p_mode, product_ids: input.p_product_ids, image_ids: input.p_image_ids, caption: input.p_caption, template: input.p_template, status: 'draft', prepared_images: [], products: [product], images: input.p_image_ids.map((id) => photos.find((image) => image.id === id)), created_at: new Date().toISOString() })
       return respond(draft)
     }
+    if (url.pathname === '/functions/v1/instagram-publish') {
+      assert.equal(request.headers().authorization, `Bearer ${token}`)
+      assert.equal(url.searchParams.get('action'), 'review')
+      return respond({ review: { id: draft.id, revision: draft.revision, account_id: '12345', username: 'prartjewelry', caption: draft.caption, image_count: draft.image_ids.length, digest: 'simulated', publishing_enabled: false } })
+    }
     if (url.pathname === '/functions/v1/instagram-prepare') {
       assert.equal(request.headers().authorization, `Bearer ${token}`)
       const action = url.searchParams.get('action')
@@ -111,6 +116,13 @@ try {
   assert.ok((await page.locator('.instagram-preview > img').getAttribute('src')).endsWith(draft.prepared_images[1].path))
   assert.equal(await page.getByRole('button', { name: 'Publicar en Instagram', exact: true }).isDisabled(), true)
   assert.ok(!remoteCalls.some((path) => path.includes('instagram-publish')))
+  await page.getByRole('button', { name: 'Revisar antes de publicar' }).click()
+  const review = page.getByRole('region', { name: 'Revisión de publicación' })
+  await review.waitFor()
+  assert.equal(await review.locator('.instagram-caption').textContent(), draft.caption)
+  await page.getByLabel('He revisado las fotografías, su orden y la descripción.').check()
+  assert.equal(await page.getByRole('button', { name: 'Publicar en Instagram', exact: true }).isDisabled(), true)
+  assert.equal(JSON.stringify(draft), beforeAccessCheck)
   // Inspect the real browser-produced JPEG dimensions and white letterboxing.
   const info = await page.evaluate(async (data) => {
     const bitmap = await createImageBitmap(await (await fetch(`data:image/jpeg;base64,${data}`)).blob())

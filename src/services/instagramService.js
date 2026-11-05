@@ -16,7 +16,11 @@ const messages = {
   PUBLIC_IMAGE_UNAVAILABLE: 'No se pudo verificar el acceso público o la integridad de un JPEG.',
   IMAGES_INCOMPLETE: 'Faltan fotografías por preparar.',
   CLEANUP_FAILED: 'No se completó la limpieza. Los archivos siguen registrados; vuelve a intentar limpiar.',
-  OPERATION_FAILED: 'No se pudo completar la operación. Recarga el historial; no se ha publicado contenido.',
+  OPERATION_FAILED: 'No se pudo completar la operación. Recarga el historial para comprobar su estado.',
+  MANUAL_REVIEW_REQUIRED: 'El intento requiere revisión. No vuelvas a enviarlo ni crees una copia para reintentar.',
+  PUBLISHED_ID_UNRESOLVED: 'Meta indica que el contenedor fue publicado. Falta conciliar su identificador; no lo vuelvas a publicar.',
+  METADATA_PENDING: 'Meta devolvió un identificador de publicación. Falta recuperar su enlace; no se repetirá el envío.',
+  PUBLISHED_WITH_WARNING: 'Meta publicó el contenido con una advertencia. Revisa la descripción en Instagram.',
   DATABASE_UNAVAILABLE: 'No se pudo consultar el historial. Verifica que la nueva migración esté aplicada.',
   UNAUTHORIZED: 'Tu sesión no es válida. Inicia sesión nuevamente.',
   FORBIDDEN: 'Tu usuario no tiene autorización administrativa.',
@@ -91,6 +95,32 @@ export async function checkInstagramPublishingAccess(draft) {
   const data = await invokeInstagramPreparation(draft, 'check')
   if (data?.access?.username !== 'prartjewelry' || typeof data.access.account_id !== 'string') throw new Error(messages.INSTAGRAM_INVALID_RESPONSE)
   return data.access
+}
+
+export async function reviewInstagramPublication(draft) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error(messages.UNAUTHORIZED)
+  const query = new URLSearchParams({ action: 'review', id: draft.id, revision: String(draft.revision) })
+  const { data, error } = await supabase.functions.invoke(`instagram-publish?${query}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  if (error || !data?.review || data.review.id !== draft.id || data.review.revision !== draft.revision) throw new Error('No se pudo revisar la versión preparada. Actualiza el historial y comprueba el despliegue de instagram-publish.')
+  return data.review
+}
+
+export async function advanceInstagramPublication(draft, action, digest) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error(messages.UNAUTHORIZED)
+  const query = new URLSearchParams({ action, id: draft.id, revision: String(draft.revision) })
+  const { data, error } = await supabase.functions.invoke(`instagram-publish?${query}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` }, body: digest ? { digest } : undefined,
+  })
+  if (error || !data?.draft) {
+    let response
+    try { response = await error?.context?.json() } catch { /* Never expose provider errors. */ }
+    throw new Error(instagramErrorMessage(response?.error?.code || 'MANUAL_REVIEW_REQUIRED'))
+  }
+  return data.draft
 }
 
 export async function getInstagramStatus() {

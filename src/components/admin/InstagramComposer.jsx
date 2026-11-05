@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import '../../instagram.css'
 import { DEFAULT_INSTAGRAM_TEMPLATE, createInstagramJpeg, generateInstagramCaption, selectPreviewImages, validateInstagramDraft } from '../../utils/instagram'
-import { checkInstagramPublishingAccess, instagramErrorMessage, loadInstagramCatalog, loadInstagramDrafts, preparedImageUrl, prepareInstagramDraft, saveInstagramDraft, sourceImageUrl } from '../../services/instagramService'
+import { advanceInstagramPublication, checkInstagramPublishingAccess, instagramErrorMessage, loadInstagramCatalog, loadInstagramDrafts, preparedImageUrl, prepareInstagramDraft, reviewInstagramPublication, saveInstagramDraft, sourceImageUrl } from '../../services/instagramService'
 
 const freshDraft = () => ({ id: crypto.randomUUID(), revision: 0, mode: 'single', product_ids: [], image_ids: [], caption: '', template: DEFAULT_INSTAGRAM_TEMPLATE, status: 'draft', prepared_images: [] })
 const stateNames = { draft: 'Borrador', preparing: 'Preparación incompleta', uploading: 'Operación en curso', prepared: 'Preparado', preparation_failed: 'Preparación fallida', cleaning: 'Limpiando', cleanup_failed: 'Limpieza pendiente', publishing: 'Publicando', publish_unknown: 'Resultado por conciliar', published: 'Publicado', publish_failed: 'Publicación fallida' }
@@ -17,6 +17,8 @@ export default function InstagramComposer() {
   const [notice, setNotice] = useState('')
   const [search, setSearch] = useState('')
   const [previewIndex, setPreviewIndex] = useState(0)
+  const [review, setReview] = useState(null)
+  const [reviewAccepted, setReviewAccepted] = useState(false)
   const locked = busy || loading || draft.status !== 'draft'
   const products = catalog.filter((product) => draft.product_ids.includes(product.id))
   const images = catalog.flatMap((product) => product.images)
@@ -100,8 +102,22 @@ export default function InstagramComposer() {
       setNotice(`Acceso de publicación y cuota disponibles para @${access.username} (ID ${access.account_id}), comprobados el ${new Date(access.checked_at).toLocaleString('es-MX')}. No se creó contenido en Meta.`)
     } catch (failure) { setNotice(''); setError(failure.message) } finally { setBusy(false) }
   }
+  async function publishStep(action) {
+    if (action === 'start' && (!reviewAccepted || !review?.publishing_enabled || !window.confirm(`¿Publicar este borrador, revisión ${draft.revision}, en @prartjewelry? Esta acción enviará el contenido a Instagram.`))) return
+    setBusy(true); setError(''); setNotice('Procesando un paso del intento…')
+    try {
+      const current = await advanceInstagramPublication(draft, action, review?.digest)
+      setDraft(current); setReview(null); setReviewAccepted(false)
+      setNotice(current.status === 'published' ? 'Publicación confirmada por Meta.' : 'Paso guardado. Revisa el estado antes de continuar. No cierres ni dupliques el intento.')
+      await reload()
+    } catch (failure) {
+      setNotice(''); setError(failure.message)
+      try { const rows = await reload(); const current = rows.find(row => row.id === draft.id); if (current) setDraft(current) } catch { /* Never retry a write after a lost response. */ }
+    } finally { setBusy(false) }
+  }
   function open(row) {
     if (dirty && (draft.product_ids.length || draft.caption) && !window.confirm('¿Descartar los cambios sin guardar?')) return
+    setReview(null); setReviewAccepted(false)
     setDraft(row); setDirty(false); setPreviewIndex(0); setError(''); setNotice('')
   }
 
@@ -153,8 +169,27 @@ export default function InstagramComposer() {
           <p className="instagram-caption">{draft.caption || 'Tu descripción aparecerá aquí.'}</p>
         </div>
         {draft.permission_checked_at && <p>Permisos y cuota comprobados: {new Date(draft.permission_checked_at).toLocaleString('es-MX')}. Se deberán comprobar nuevamente al publicar.</p>}
-        <button className="admin-button" type="button" disabled aria-describedby="instagram-publish-lock">Publicar en Instagram</button>
-        <p id="instagram-publish-lock">La publicación real está deshabilitada hasta autorizar expresamente la prueba. Preparar no crea contenedores ni publica contenido.</p>
+        {draft.instagram_id && <p>ID de publicación: {draft.instagram_id}</p>}
+        {draft.published_at && <p>Publicado: {new Date(draft.published_at).toLocaleString('es-MX')}</p>}
+        {/^https:\/\/(www\.)?instagram\.com\//.test(draft.instagram_url || '') && <p><a href={draft.instagram_url} target="_blank" rel="noopener noreferrer">Ver publicación en Instagram</a></p>}
+        <button className="admin-button" type="button" disabled={busy || dirty || draft.status !== 'prepared' || review?.id !== draft.id || review?.revision !== draft.revision || !review?.publishing_enabled || !reviewAccepted} onClick={() => publishStep('start')} aria-describedby="instagram-publish-lock">Publicar en Instagram</button>
+        {draft.status === 'publishing' && ['creating', 'waiting', 'ready', 'metadata'].includes(draft.publish_progress?.phase) && <div>
+          <p>Paso: {draft.publish_progress.phase}. Si espera un contenedor, deja transcurrir un minuto entre consultas. El envío requiere que Meta confirme que está listo.</p>
+          <button className="admin-button" type="button" disabled={busy} onClick={() => publishStep('continue')}>Continuar intento confirmado</button>
+        </div>}
+        {draft.status === 'publish_unknown' && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('reconcile')}>Consultar resultado sin reenviar</button>}
+        <button className="admin-button admin-button--secondary" type="button" disabled={busy || dirty || draft.status !== 'prepared'} onClick={async () => {
+          setBusy(true); setError(''); setReview(null); setReviewAccepted(false)
+          try { setReview(await reviewInstagramPublication(draft)) } catch (failure) { setError(failure.message) } finally { setBusy(false) }
+        }}>Revisar antes de publicar</button>
+        {review && review.id === draft.id && review.revision === draft.revision && draft.status === 'prepared' && !dirty && <div role="region" aria-label="Revisión de publicación">
+          <p>Destino: @{review.username} · ID {review.account_id}</p>
+          <p>Borrador {review.id} · revisión {review.revision} · {review.image_count} foto(s)</p>
+          <p className="instagram-caption">{review.caption}</p>
+          <label><input type="checkbox" checked={reviewAccepted} onChange={event => setReviewAccepted(event.target.checked)} />He revisado las fotografías, su orden y la descripción.</label>
+          <p>{reviewAccepted ? 'Revisión local marcada. Esto no autoriza ni envía una publicación.' : 'Revisa también todas las fotografías de la vista previa.'}</p>
+        </div>}
+        <p id="instagram-publish-lock">{review?.publishing_enabled ? 'Este borrador está autorizado para la prueba. Publicar requiere revisar el contenido y confirmar el envío.' : 'La publicación real está deshabilitada hasta autorizar expresamente la prueba. Preparar no crea contenedores ni publica contenido.'}</p>
       </section>
       <section className="admin-form-section">
         <div className="admin-form-section__heading"><h2>Historial</h2><p>Últimos 50 borradores y publicaciones.</p></div>
