@@ -1,5 +1,7 @@
 # Instagram: borradores y preparación manual
 
+Consulta también la [auditoría funcional y de seguridad](instagram-audit.md), con evidencia de PostgreSQL Cloud, validación de los archivos públicos y los pasos pendientes antes de publicar.
+
 Esta etapa implementa selección de productos/fotos, orden, descripción, vista previa, guardado y preparación de imágenes con comprobación de acceso a publicación. **No publica contenido.** `instagram-publish` autentica y autoriza, pero responde siempre `423 PUBLISHING_DISABLED`. No hay una variable de entorno ni un parámetro de petición que quite el bloqueo.
 
 ## Preparación y despliegue
@@ -53,6 +55,8 @@ Documentación oficial consultada el 4 de noviembre de 2026:
 4. Revisa la vista previa y pulsa **Guardar borrador**. No se consulta Meta ni se suben archivos al guardar. La descripción puede quedar vacía en el borrador, pero debe completarse antes de preparar. Se admiten hasta 2200 caracteres, 30 hashtags y 20 menciones.
 5. Pulsa **Preparar imágenes y verificar permisos**. Se comprueba Meta, se convierten las fotos y se verifican las copias públicas. Mientras haya cambios sin guardar no se puede preparar.
 6. Revisa las fotos finales en la vista previa, que ahora utiliza los JPEG almacenados y validados. **Publicar en Instagram permanece deshabilitado.**
+
+En un borrador guardado, **Verificar permisos de publicación** consulta cuenta y cuota sin modificar datos ni crear contenedores. Sirve para volver a comprobar el acceso sin limpiar los JPEG. Si el ID de la cuenta cambió respecto de la preparación, la verificación falla. Las URLs multimedia deben ser HTTPS públicas, sin credenciales, firmas ni parámetros de consulta.
 
 Cada borrador guarda IDs y una copia del nombre, precio, descripción y rutas seleccionadas. El contenido no cambia silenciosamente si se edita el catálogo. Para actualizarlo, limpia la preparación, edita y vuelve a guardar/generar el texto. La base de datos comprueba que los IDs existen y que cada foto pertenece a un producto seleccionado. Los precios/descripciones de la copia se leen del catálogo en SQL, no del navegador.
 

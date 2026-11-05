@@ -22,10 +22,27 @@ export function validateInstagramDraft({ mode, product_ids, image_ids, caption }
 export function catalogImageUrl(supabase, image) {
   const path = image.storage_path
   if (typeof path !== 'string' || !path.startsWith(`products/${image.product_id}/`) || /[\\?#%]/.test(path) || path.split('/').some((part) => !part || part === '.' || part === '..')) throw new Error('La ruta de la fotografía no es válida.')
-  return supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl
+  return validatePublicMediaUrl(supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl, 'product-images')
+}
+
+export function validatePublicMediaUrl(value, bucket) {
+  const url = new URL(value)
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !url.pathname.startsWith(`/storage/v1/object/public/${bucket}/`)) {
+    throw new Error('Las imágenes deben usar URLs públicas HTTPS de Storage, sin tokens ni firmas.')
+  }
+  return url.href
+}
+
+export function selectPreviewImages(draft, catalogImages, dirty) {
+  return draft.image_ids.map((id) => {
+    const saved = draft.images?.find((image) => image.id === id)
+    const current = catalogImages.find((image) => image.id === id)
+    return dirty ? current || saved : saved || current
+  }).filter(Boolean)
 }
 
 export async function createInstagramJpeg(url) {
+  validatePublicMediaUrl(url, 'product-images')
   const response = await fetch(url, { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000) })
   if (!response.ok) throw new Error('No se pudo descargar la fotografía original.')
   const blob = await response.blob()

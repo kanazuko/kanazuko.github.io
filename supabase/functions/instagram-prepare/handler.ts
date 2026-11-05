@@ -2,7 +2,7 @@ import { authenticate, checkPublishingAccess, cors, database, env, json, limited
 
 type Image = { id: string; product_id: string; storage_path: string }
 type Prepared = { image_id: string; path: string; sha256?: string; width?: number; height?: number; bytes?: number }
-type Draft = { id: string; revision: number; status: string; updated_at: string; images: Image[]; prepared_images: Prepared[]; caption: string; mode: string }
+type Draft = { id: string; revision: number; status: string; updated_at: string; images: Image[]; prepared_images: Prepared[]; caption: string; mode: string; instagram_account_id?: string }
 const maxBytes = 8 * 1024 * 1024
 async function patch(draft: Draft, changes: object): Promise<Draft> {
   const rows = await database(`instagram_posts?id=eq.${draft.id}&revision=eq.${draft.revision}&status=eq.${draft.status}&updated_at=eq.${encodeURIComponent(draft.updated_at)}`, 'PATCH', changes)
@@ -29,9 +29,15 @@ export function createPrepareHandler(normalizeJpeg: (bytes: Uint8Array) => Uint8
       const id = url.searchParams.get('id')
       const revision = Number(url.searchParams.get('revision'))
       const action = url.searchParams.get('action')
-      if (!uuid(id) || !Number.isSafeInteger(revision) || revision < 1 || !['begin', 'upload', 'finish', 'reset'].includes(action || '')) throw new SafeError('INVALID_REQUEST')
+      if (!uuid(id) || !Number.isSafeInteger(revision) || revision < 1 || !['check', 'begin', 'upload', 'finish', 'reset'].includes(action || '')) throw new SafeError('INVALID_REQUEST')
       const [draft]: Draft[] = await database(`instagram_posts?id=eq.${id}&select=*`)
       if (!draft || draft.revision !== revision) throw new SafeError('DRAFT_CONFLICT', 409)
+
+      if (action === 'check') {
+        const access = await checkPublishingAccess()
+        if (draft.instagram_account_id && draft.instagram_account_id !== access.account_id) throw new SafeError('INSTAGRAM_ACCOUNT_CHANGED', 409)
+        return json({ access: { ...access, username: 'prartjewelry' } })
+      }
 
       if (action === 'reset') {
         failureState = 'cleanup_failed'
@@ -101,6 +107,7 @@ export function createPrepareHandler(normalizeJpeg: (bytes: Uint8Array) => Uint8
         if (await digest(bytes) !== image.sha256) throw new SafeError('PUBLIC_IMAGE_UNAVAILABLE')
       }
       const access = await checkPublishingAccess()
+      if (draft.instagram_account_id !== access.account_id) throw new SafeError('INSTAGRAM_ACCOUNT_CHANGED', 409)
       return json({ draft: await patch(locked, { status: 'prepared', permission_checked_at: access.checked_at, instagram_account_id: access.account_id, error_code: null }) })
     } catch (error) {
       if (locked) {

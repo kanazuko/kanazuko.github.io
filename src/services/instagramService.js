@@ -1,7 +1,9 @@
 import { supabase } from '../lib/supabase'
-import { catalogImageUrl } from '../utils/instagram'
+import { catalogImageUrl, validatePublicMediaUrl } from '../utils/instagram'
 
 const messages = {
+  INSTAGRAM_ACCOUNT_CHANGED: 'La cuenta de Instagram ya no coincide con la preparación guardada. Revisa la conexión y vuelve a preparar antes de publicar.',
+  INVALID_MEDIA_ORIGIN: 'La configuración multimedia debe usar un origen HTTPS de Supabase, sin credenciales ni parámetros.',
   PUBLISHING_DISABLED: 'La publicación real está deshabilitada en esta etapa.',
   PUBLISH_LIMIT_UNVERIFIED: 'No se pudo comprobar la cuota de publicación de Meta. La preparación permanece bloqueada.',
   DRAFT_CONFLICT: 'El borrador cambió o está ocupado. Recarga el historial y vuelve a abrirlo.',
@@ -57,12 +59,12 @@ export async function saveInstagramDraft(draft) {
 
 export function preparedImageUrl(path) {
   if (!/^[0-9a-f-]{36}\/[1-9][0-9]*\/[0-9a-f-]{36}\.jpg$/i.test(path)) return ''
-  return supabase.storage.from('instagram-prepared').getPublicUrl(path).data.publicUrl
+  return validatePublicMediaUrl(supabase.storage.from('instagram-prepared').getPublicUrl(path).data.publicUrl, 'instagram-prepared')
 }
 
 export function sourceImageUrl(image) { return catalogImageUrl(supabase, image) }
 
-export async function prepareInstagramDraft(draft, action, imageId, body) {
+async function invokeInstagramPreparation(draft, action, imageId, body) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error(messages.UNAUTHORIZED)
   const query = new URLSearchParams({ id: draft.id, revision: String(draft.revision), action })
@@ -76,8 +78,19 @@ export async function prepareInstagramDraft(draft, action, imageId, body) {
     try { response = await error.context?.json() } catch { /* No raw error bodies. */ }
     throw new Error(instagramErrorMessage(response?.error?.code || (error.context?.status === 401 ? 'UNAUTHORIZED' : 'OPERATION_FAILED')))
   }
+  return data
+}
+
+export async function prepareInstagramDraft(draft, action, imageId, body) {
+  const data = await invokeInstagramPreparation(draft, action, imageId, body)
   if (!data?.draft) throw new Error(messages.OPERATION_FAILED)
   return data.draft
+}
+
+export async function checkInstagramPublishingAccess(draft) {
+  const data = await invokeInstagramPreparation(draft, 'check')
+  if (data?.access?.username !== 'prartjewelry' || typeof data.access.account_id !== 'string') throw new Error(messages.INSTAGRAM_INVALID_RESPONSE)
+  return data.access
 }
 
 export async function getInstagramStatus() {

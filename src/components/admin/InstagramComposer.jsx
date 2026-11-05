@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import '../../instagram.css'
-import { DEFAULT_INSTAGRAM_TEMPLATE, createInstagramJpeg, generateInstagramCaption, validateInstagramDraft } from '../../utils/instagram'
-import { instagramErrorMessage, loadInstagramCatalog, loadInstagramDrafts, preparedImageUrl, prepareInstagramDraft, saveInstagramDraft, sourceImageUrl } from '../../services/instagramService'
+import { DEFAULT_INSTAGRAM_TEMPLATE, createInstagramJpeg, generateInstagramCaption, selectPreviewImages, validateInstagramDraft } from '../../utils/instagram'
+import { checkInstagramPublishingAccess, instagramErrorMessage, loadInstagramCatalog, loadInstagramDrafts, preparedImageUrl, prepareInstagramDraft, saveInstagramDraft, sourceImageUrl } from '../../services/instagramService'
 
 const freshDraft = () => ({ id: crypto.randomUUID(), revision: 0, mode: 'single', product_ids: [], image_ids: [], caption: '', template: DEFAULT_INSTAGRAM_TEMPLATE, status: 'draft', prepared_images: [] })
 const stateNames = { draft: 'Borrador', preparing: 'Preparación incompleta', uploading: 'Operación en curso', prepared: 'Preparado', preparation_failed: 'Preparación fallida', cleaning: 'Limpiando', cleanup_failed: 'Limpieza pendiente', publishing: 'Publicando', publish_unknown: 'Resultado por conciliar', published: 'Publicado', publish_failed: 'Publicación fallida' }
@@ -20,7 +20,7 @@ export default function InstagramComposer() {
   const locked = busy || loading || draft.status !== 'draft'
   const products = catalog.filter((product) => draft.product_ids.includes(product.id))
   const images = catalog.flatMap((product) => product.images)
-  const selectedImages = draft.image_ids.map((id) => images.find((image) => image.id === id) || draft.images?.find((image) => image.id === id)).filter(Boolean)
+  const selectedImages = selectPreviewImages(draft, images, dirty)
   const previewImage = selectedImages[previewIndex] || selectedImages[0]
   const prepared = draft.prepared_images?.find((image) => image.image_id === previewImage?.id && image.sha256)
   let previewUrl = ''
@@ -93,6 +93,13 @@ export default function InstagramComposer() {
       await reload()
     } catch (failure) { setError(failure.message) } finally { setBusy(false) }
   }
+  async function checkAccess() {
+    setBusy(true); setError(''); setNotice('Verificando acceso de publicación sin modificar el borrador…')
+    try {
+      const access = await checkInstagramPublishingAccess(draft)
+      setNotice(`Acceso de publicación y cuota disponibles para @${access.username} (ID ${access.account_id}), comprobados el ${new Date(access.checked_at).toLocaleString('es-MX')}. No se creó contenido en Meta.`)
+    } catch (failure) { setNotice(''); setError(failure.message) } finally { setBusy(false) }
+  }
   function open(row) {
     if (dirty && (draft.product_ids.length || draft.caption) && !window.confirm('¿Descartar los cambios sin guardar?')) return
     setDraft(row); setDirty(false); setPreviewIndex(0); setError(''); setNotice('')
@@ -133,6 +140,7 @@ export default function InstagramComposer() {
         <div className="instagram-actions">
           <button className="admin-button" type="button" disabled={locked || !dirty} onClick={save}>Guardar borrador</button>
           <button className="admin-button" type="button" disabled={busy || dirty || !draft.revision || !['draft', 'preparing'].includes(draft.status)} onClick={prepare}>{draft.status === 'preparing' ? 'Continuar preparación' : 'Preparar imágenes y verificar permisos'}</button>
+          <button className="admin-button admin-button--secondary" type="button" disabled={busy || dirty || !draft.revision} onClick={checkAccess}>Verificar permisos de publicación</button>
           {draft.revision > 0 && draft.status !== 'draft' && !['publishing', 'published', 'publish_unknown'].includes(draft.status) && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={reset}>Limpiar preparación y editar</button>}
         </div>
       </section>

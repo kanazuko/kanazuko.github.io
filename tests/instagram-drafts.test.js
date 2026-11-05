@@ -2,13 +2,26 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFile } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
-import { generateInstagramCaption, validateInstagramDraft, catalogImageUrl } from '../src/utils/instagram.js'
+import { generateInstagramCaption, validateInstagramDraft, catalogImageUrl, selectPreviewImages, validatePublicMediaUrl } from '../src/utils/instagram.js'
 
 const admin = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const user = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const product = '11111111-1111-4111-8111-111111111111'
 const image = '22222222-2222-4222-8222-222222222222'
 const id = '33333333-3333-4333-8333-333333333333'
+
+test('media URLs require HTTPS and public unsigned Storage paths; saved preview keeps its snapshot', () => {
+  const valid = 'https://test.supabase.co/storage/v1/object/public/product-images/photo.jpg'
+  assert.equal(validatePublicMediaUrl(valid, 'product-images'), valid)
+  for (const bad of [valid.replace('https:', 'http:'), valid + '?token=secret', valid + '?signature=x', valid + '#fragment', valid.replace('//test', '//user:password@test'), valid.replace('/public/', '/sign/')]) {
+    assert.throws(() => validatePublicMediaUrl(bad, 'product-images'))
+  }
+  const saved = { id: image, storage_path: 'saved.jpg' }
+  const current = { id: image, storage_path: 'changed.jpg' }
+  const draft = { image_ids: [image], images: [saved] }
+  assert.deepEqual(selectPreviewImages(draft, [current], false), [saved])
+  assert.deepEqual(selectPreviewImages(draft, [current], true), [current])
+})
 
 test('caption templates preserve literal product text and selection validation', () => {
   assert.match(generateInstagramCaption([{ name: '$& <Anillo>', price: 125, description: 'Descripción' }], '{nombre}\n{precio}\n{descripcion}'), /\$& <Anillo>\n\$125.00 MXN\nDescripción/)

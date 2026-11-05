@@ -44,12 +44,13 @@ try {
     if (url.pathname.includes('/public/instagram-prepared/')) return route.fulfill({ body: uploads[0], contentType: 'image/jpeg', headers: { 'Access-Control-Allow-Origin': '*' } })
     if (url.pathname === '/rest/v1/rpc/save_instagram_draft') {
       const input = request.postDataJSON()
-      draft = { id: input.p_id, revision: input.p_revision + 1, mode: input.p_mode, product_ids: input.p_product_ids, image_ids: input.p_image_ids, caption: input.p_caption, template: input.p_template, status: 'draft', prepared_images: [], products: [product], images: input.p_image_ids.map((id) => photos.find((image) => image.id === id)), created_at: new Date().toISOString() }
+      draft = structuredClone({ id: input.p_id, revision: input.p_revision + 1, mode: input.p_mode, product_ids: input.p_product_ids, image_ids: input.p_image_ids, caption: input.p_caption, template: input.p_template, status: 'draft', prepared_images: [], products: [product], images: input.p_image_ids.map((id) => photos.find((image) => image.id === id)), created_at: new Date().toISOString() })
       return respond(draft)
     }
     if (url.pathname === '/functions/v1/instagram-prepare') {
       assert.equal(request.headers().authorization, `Bearer ${token}`)
       const action = url.searchParams.get('action')
+      if (action === 'check') return respond({ access: { account_id: '12345', username: 'prartjewelry', checked_at: new Date().toISOString() } })
       if (action === 'begin') {
         draft.status = 'preparing'
         draft.prepared_images = draft.images.map((image) => ({ image_id: image.id, path: `${draft.id}/${draft.revision}/${image.id}.jpg` }))
@@ -77,10 +78,37 @@ try {
   await page.getByText('Borrador guardado. No se envió contenido a Instagram.').waitFor()
   assert.deepEqual(draft.image_ids, [photos[1].id, photos[0].id])
   assert.ok(!remoteCalls.some((path) => path.includes('/functions/')))
+  const savedId = draft.id
+  const savedCaption = draft.caption
+  const savedPath = draft.images[0].storage_path
+  photos[1].storage_path = `products/${productId}/changed-catalog.webp`
+  await page.reload()
+  await page.getByRole('button', { name: 'Abrir borrador' }).click()
+  assert.equal(await page.getByLabel('Descripción editable').inputValue(), savedCaption)
+  assert.equal(await page.locator('.instagram-caption').textContent(), savedCaption)
+  assert.ok((await page.locator('.instagram-preview > img').getAttribute('src')).endsWith(savedPath), 'saved preview must not switch to changed catalog image')
+  await page.waitForFunction(() => { const image = document.querySelector('.instagram-preview > img'); return image?.complete && image.naturalWidth > 0 })
+  await page.getByLabel('Descripción editable').fill('Descripción editada y recuperada')
+  await page.getByRole('button', { name: 'Guardar borrador' }).click()
+  await page.getByText('Borrador guardado. No se envió contenido a Instagram.').waitFor()
+  assert.equal(draft.id, savedId)
+  assert.equal(draft.revision, 2)
+  await page.reload()
+  await page.getByRole('button', { name: 'Abrir borrador' }).click()
+  assert.equal(await page.getByLabel('Descripción editable').inputValue(), 'Descripción editada y recuperada')
+  assert.equal(await page.locator('.instagram-caption').textContent(), draft.caption)
   await page.getByRole('button', { name: 'Preparar imágenes y verificar permisos' }).click()
   await page.getByText('Preparación completa.', { exact: false }).waitFor()
   assert.equal(uploads.length, 2)
   assert.equal(draft.status, 'prepared')
+  const beforeAccessCheck = JSON.stringify(draft)
+  await page.getByRole('button', { name: 'Verificar permisos de publicación' }).click()
+  await page.getByText('Acceso de publicación y cuota disponibles', { exact: false }).waitFor()
+  assert.equal(JSON.stringify(draft), beforeAccessCheck)
+  await page.waitForFunction(() => { const image = document.querySelector('.instagram-preview > img'); return image?.complete && image.naturalWidth === 1080 })
+  assert.ok((await page.locator('.instagram-preview > img').getAttribute('src')).endsWith(draft.prepared_images[0].path))
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click()
+  assert.ok((await page.locator('.instagram-preview > img').getAttribute('src')).endsWith(draft.prepared_images[1].path))
   assert.equal(await page.getByRole('button', { name: 'Publicar en Instagram', exact: true }).isDisabled(), true)
   assert.ok(!remoteCalls.some((path) => path.includes('instagram-publish')))
   // Inspect the real browser-produced JPEG dimensions and white letterboxing.
@@ -96,5 +124,5 @@ try {
   await page.setViewportSize({ width: 390, height: 844 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'mobile overflow')
   assert.deepEqual(errors, [])
-  console.log('Instagram browser checks passed: selection, ordering, caption, draft, WebP → JPEG, preparation, disabled publish, mobile layout. All remote responses simulated.')
+  console.log('Instagram browser checks passed: selection, ordering, save/reload/edit/reload, rendered photos and caption, saved snapshot, WebP → JPEG, preparation, disabled publish, mobile layout. All remote responses simulated.')
 } finally { await browser.close(); await server.close() }

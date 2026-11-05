@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createPrepareHandler } from '../supabase/functions/instagram-prepare/handler.ts'
+import { publicImageUrl } from '../supabase/functions/_shared/instagram.ts'
 
 test('preparation state machine, permission gates, cleanup and disabled publishing', async (t) => {
   const previous = { fetch: globalThis.fetch, Deno: globalThis.Deno }
@@ -72,6 +73,15 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
   }
   try {
     await import('../supabase/functions/instagram-publish/index.ts')
+    await t.test('backend rejects insecure and credential-bearing media origins', () => {
+      const saved = secrets.SUPABASE_URL
+      for (const origin of ['http://test.supabase.co', 'https://user:pass@test.supabase.co', 'https://test.supabase.co?token=x', 'https://test.supabase.co/prefix', 'https://test.supabase.co#fragment']) {
+        secrets.SUPABASE_URL = origin
+        assert.throws(() => publicImageUrl('instagram-prepared', `${id}/1/${imageId}.jpg`), /INVALID_MEDIA_ORIGIN/)
+      }
+      secrets.SUPABASE_URL = saved
+      assert.equal(publicImageUrl('instagram-prepared', `${id}/1/${imageId}.jpg`), `${saved}/storage/v1/object/public/instagram-prepared/${id}/1/${imageId}.jpg`)
+    })
     await t.test('anonymous and non-admin callers cannot reach Meta, storage or service-role database operations', async () => {
       assert.equal((await handler(request('begin', undefined, ''))).status, 401)
       assert.equal(calls.length, 0)
@@ -117,6 +127,22 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
       assert.equal(result.status, 423)
       assert.equal((await result.json()).error.code, 'PUBLISHING_DISABLED')
       assert.equal(calls.filter(({ url }) => url.hostname === 'graph.facebook.com').length, before)
+    })
+    await t.test('permission audit is read-only and rejects an account change', async () => {
+      const before = structuredClone(row)
+      const mutationCount = () => calls.filter(({ options }) => options.method === 'PATCH' || options.method === 'POST' || options.method === 'DELETE').length
+      const count = mutationCount()
+      const response = await handler(request('check'))
+      assert.equal(response.status, 200)
+      assert.equal((await response.json()).access.username, 'prartjewelry')
+      assert.deepEqual(row, before)
+      assert.equal(mutationCount(), count)
+      row.instagram_account_id = '99999'
+      const mismatch = await handler(request('check'))
+      assert.equal(mismatch.status, 409)
+      assert.equal((await mismatch.json()).error.code, 'INSTAGRAM_ACCOUNT_CHANGED')
+      row.instagram_account_id = before.instagram_account_id
+      assert.equal(mutationCount(), count)
     })
     await t.test('failed cleanup retains tracked paths; retry removes copies without touching originals', async () => {
       deleteFails = true

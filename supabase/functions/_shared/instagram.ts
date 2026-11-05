@@ -47,7 +47,9 @@ export async function database(path: string, method = 'GET', body?: unknown) {
 export const uuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 export function publicImageUrl(bucket: 'product-images' | 'instagram-prepared', path: string) {
   if (!path || path.split('/').some((part) => !part || part === '.' || part === '..') || /[\\?#%]/.test(path)) throw new SafeError('INVALID_IMAGE_PATH')
-  return `${env('SUPABASE_URL')}/storage/v1/object/public/${bucket}/${path.split('/').map(encodeURIComponent).join('/')}`
+  const base = new URL(env('SUPABASE_URL'))
+  if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash || base.pathname !== '/') throw new SafeError('INVALID_MEDIA_ORIGIN', 503)
+  return `${base.origin}/storage/v1/object/public/${bucket}/${path.split('/').map(encodeURIComponent).join('/')}`
 }
 export async function graph(path: string) {
   // Only fixed paths constructed by backend code; no user-supplied hosts/URLs.
