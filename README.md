@@ -76,6 +76,8 @@ Referencias: [envío de correos con Supabase](https://supabase.com/docs/guides/f
 
 ## Instagram: verificar conexión (fase 1)
 
+**Nueva etapa:** la sección también incluye borradores, selección de fotos, descripciones, vista previa y preparación de JPEG. Consulta [la guía de borradores y preparación](docs/instagram-drafts.md) para la nueva migración, despliegue, permisos y pruebas. La publicación real sigue bloqueada en el backend.
+
 En **Admin → Instagram** (`/#/admin/instagram`, por el HashRouter) se puede verificar la cuenta `@prartjewelry`. El estado inicial es **Sin verificar**; únicamente una respuesta válida de Meta con esa cuenta muestra **Conectado**. Un fallo limpia la cuenta anterior y muestra **Desconectado · no se pudo confirmar la conexión**; esto no implica que el token necesariamente haya sido revocado. No se publica contenido ni se implementa OAuth o renovación automática en esta fase.
 
 ### Endpoint y configuración de Meta
@@ -109,7 +111,7 @@ La guía de Meta indica que su configuración predeterminada incluye otros permi
 4. Mantén **Verify JWT** habilitado: `supabase/config.toml` declara `verify_jwt = true`. No uses `--no-verify-jwt`. Si el gateway devuelve `Invalid JWT`, revisa la sesión, el proyecto y su configuración de firma siguiendo la [documentación de autenticación de Supabase](https://supabase.com/docs/guides/functions/auth); no desactives la verificación.
 5. Ejecuta `npm run dev` para probar el nuevo frontend localmente. Para verlo en GitHub Pages será necesario publicar posteriormente el frontend mediante el flujo habitual del repositorio.
 
-No hay migraciones nuevas y esta fase no necesita `supabase db push`. El código de la función no tiene dependencias externas: utiliza las APIs estándar de Deno y HTTP. El despliegue y la configuración del secreto son pasos manuales pendientes; las pruebas simuladas no demuestran una conexión real.
+La verificación de conexión de la fase 1 no necesita migraciones ni `supabase db push`; la nueva etapa de borradores sí requiere la migración descrita en su guía. `instagram-status` no tiene dependencias externas: utiliza las APIs estándar de Deno y HTTP. Las pruebas simuladas no demuestran una conexión real.
 
 ### Probar con tu administrador
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { getInstagramStatus } from '../../services/instagramService'
+import InstagramComposer from '../../components/admin/InstagramComposer'
 
 export default function AdminInstagramPage() {
   const [checking, setChecking] = useState(false)
@@ -35,6 +36,7 @@ export default function AdminInstagramPage() {
           {checking ? 'Verificando…' : 'Verificar conexión'}
         </button>
       </section>
+      <InstagramComposer />
     </div>
   )
 }

@@ -1,0 +1,23 @@
+.instagram-workspace { display: grid; gap: 1.5rem; margin-top: 1.5rem; }
+.instagram-fields { display: grid; gap: 1rem; border: 0; padding: 1rem 0; min-width: 0; }
+.instagram-fields legend { font-weight: 600; padding-top: 1.5rem; }
+.instagram-fields > label { display: grid; gap: .5rem; }
+.instagram-fields input:not([type=checkbox]), .instagram-fields textarea, .instagram-fields select { width: 100%; padding: .7rem; border: 1px solid #d8d2c8; border-radius: .5rem; font: inherit; background: white; color: #302b27; }
+.instagram-fields textarea { resize: vertical; }
+.instagram-product-list { display: grid; gap: .65rem; max-height: 240px; overflow: auto; }
+.instagram-product-list label { display: flex; align-items: center; gap: .65rem; }
+.instagram-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 1rem; }
+.instagram-image-choice { display: grid; gap: .5rem; border: 1px solid #e4ddd3; border-radius: .5rem; padding: .5rem; }
+.instagram-image-choice img { width: 100%; aspect-ratio: 1; object-fit: contain; background: white; }
+.instagram-image-choice span { font-size: .85rem; }
+.instagram-order-list { padding-left: 1.5rem; }
+.instagram-order-list li { padding: .5rem 0; }
+.instagram-order-list button { margin-left: .5rem; min-width: 36px; min-height: 36px; }
+.instagram-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.instagram-preview { max-width: 540px; margin: 1rem auto; padding: 1rem; border: 1px solid #e4ddd3; border-radius: .75rem; background: white; }
+.instagram-preview > img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; margin: 1rem 0; background: white; }
+.instagram-caption { white-space: pre-wrap; overflow-wrap: anywhere; }
+.instagram-history article { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid #e4ddd3; }
+.instagram-history p { margin: .4rem 0; overflow-wrap: anywhere; }
+.instagram-history button { flex-shrink: 0; }
+.instagram-workspace button:disabled { opacity: .55; cursor: not-allowed; }

@@ -10,6 +10,12 @@ verify_jwt = false
 [functions.instagram-status]
 verify_jwt = true
 
+[functions.instagram-prepare]
+verify_jwt = true
+
+[functions.instagram-publish]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

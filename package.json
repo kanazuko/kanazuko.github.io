@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test": "node --test",
     "test:browser": "node scripts/check-cart-browser.mjs",
+    "test:instagram-browser": "node scripts/check-instagram-browser.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
