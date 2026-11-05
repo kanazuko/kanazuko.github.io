@@ -2,7 +2,7 @@ import { authenticate, checkPublishingAccess, cors, database, env, json, limited
 
 type Image = { id: string; product_id: string; storage_path: string }
 type Prepared = { image_id: string; path: string; sha256?: string; width?: number; height?: number; bytes?: number }
-type Draft = { id: string; revision: number; status: string; updated_at: string; images: Image[]; prepared_images: Prepared[]; caption: string; mode: string; instagram_account_id?: string }
+type Draft = { id: string; revision: number; status: string; updated_at: string; images: Image[]; prepared_images: Prepared[]; caption: string; mode: string; instagram_account_id?: string; publish_attempt_id?: string; container_id?: string; instagram_id?: string }
 const maxBytes = 8 * 1024 * 1024
 async function patch(draft: Draft, changes: object): Promise<Draft> {
   const rows = await database(`instagram_posts?id=eq.${draft.id}&revision=eq.${draft.revision}&status=eq.${draft.status}&updated_at=eq.${encodeURIComponent(draft.updated_at)}`, 'PATCH', changes)
@@ -29,8 +29,9 @@ export function createPrepareHandler(normalizeJpeg: (bytes: Uint8Array) => Uint8
       const id = url.searchParams.get('id')
       const revision = Number(url.searchParams.get('revision'))
       const action = url.searchParams.get('action')
-      if (!uuid(id) || !Number.isSafeInteger(revision) || revision < 1 || !['check', 'begin', 'upload', 'finish', 'reset'].includes(action || '')) throw new SafeError('INVALID_REQUEST')
+      if (!uuid(id) || !Number.isSafeInteger(revision) || revision < 1 || !['check', 'begin', 'upload', 'finish', 'reset', 'delete'].includes(action || '')) throw new SafeError('INVALID_REQUEST')
       const [draft]: Draft[] = await database(`instagram_posts?id=eq.${id}&select=*`)
+      if (!draft && action === 'delete') return json({ deleted: true })
       if (!draft || draft.revision !== revision) throw new SafeError('DRAFT_CONFLICT', 409)
 
       if (action === 'check') {
@@ -39,8 +40,9 @@ export function createPrepareHandler(normalizeJpeg: (bytes: Uint8Array) => Uint8
         return json({ access: { ...access, username: 'prartjewelry' } })
       }
 
-      if (action === 'reset') {
+      if (action === 'reset' || action === 'delete') {
         failureState = 'cleanup_failed'
+        if (draft.publish_attempt_id || draft.container_id || draft.instagram_id) throw new SafeError('DRAFT_HAS_PUBLICATION', 409)
         if (!['draft', 'preparing', 'prepared', 'preparation_failed', 'cleanup_failed', 'cleaning', 'uploading'].includes(draft.status)) throw new SafeError('DRAFT_CONFLICT', 409)
         if (['uploading', 'cleaning'].includes(draft.status) && Date.now() - Date.parse(draft.updated_at) < 600000) throw new SafeError('OPERATION_IN_PROGRESS', 409)
         locked = await patch(draft, { status: 'cleaning', error_code: null })
@@ -52,6 +54,11 @@ export function createPrepareHandler(normalizeJpeg: (bytes: Uint8Array) => Uint8
             redirect: 'error', signal: AbortSignal.timeout(15000),
           })
           if (!response.ok) throw new SafeError('CLEANUP_FAILED', 503)
+        }
+        if (action === 'delete') {
+          const rows = await database(`instagram_posts?id=eq.${locked.id}&revision=eq.${locked.revision}&status=eq.cleaning&updated_at=eq.${encodeURIComponent(locked.updated_at)}`, 'DELETE')
+          if (rows.length !== 1) throw new SafeError('DRAFT_CONFLICT', 409)
+          return json({ deleted: true })
         }
         const result = await patch(locked, { status: 'draft', revision: revision + 1, prepared_images: [], permission_checked_at: null, instagram_account_id: null, error_code: null })
         return json({ draft: result })

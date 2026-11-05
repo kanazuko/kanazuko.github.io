@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import '../../instagram.css'
 import { DEFAULT_INSTAGRAM_TEMPLATE, createInstagramJpeg, generateInstagramCaption, selectPreviewImages, validateInstagramDraft } from '../../utils/instagram'
-import { advanceInstagramPublication, checkInstagramPublishingAccess, instagramErrorMessage, loadInstagramCatalog, loadInstagramDrafts, preparedImageUrl, prepareInstagramDraft, reviewInstagramPublication, saveInstagramDraft, sourceImageUrl } from '../../services/instagramService'
+import { advanceInstagramPublication, checkInstagramPublishingAccess, deleteInstagramDraft, instagramErrorMessage, loadInstagramCatalog, loadInstagramDrafts, preparedImageUrl, prepareInstagramDraft, reviewInstagramPublication, saveInstagramDraft, sourceImageUrl } from '../../services/instagramService'
 
 const freshDraft = () => ({ id: crypto.randomUUID(), revision: 0, mode: 'single', product_ids: [], image_ids: [], caption: '', template: DEFAULT_INSTAGRAM_TEMPLATE, status: 'draft', prepared_images: [] })
+const canDelete = row => row.revision > 0 && !row.publish_attempt_id && !row.container_id && !row.instagram_id && ['draft', 'preparing', 'prepared', 'preparation_failed', 'cleanup_failed', 'cleaning', 'uploading'].includes(row.status)
 const stateNames = { draft: 'Borrador', preparing: 'Preparación incompleta', uploading: 'Operación en curso', prepared: 'Preparado', preparation_failed: 'Preparación fallida', cleaning: 'Limpiando', cleanup_failed: 'Limpieza pendiente', publishing: 'Publicando', publish_unknown: 'Resultado por conciliar', published: 'Publicado', publish_failed: 'Publicación fallida' }
 
 export default function InstagramComposer() {
@@ -95,6 +96,19 @@ export default function InstagramComposer() {
       await reload()
     } catch (failure) { setError(failure.message) } finally { setBusy(false) }
   }
+  async function removeDraft(row) {
+    if (!window.confirm('¿Eliminar este borrador y sus copias preparadas? Las fotografías originales de los productos se conservarán. Esta acción no se puede deshacer.')) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await deleteInstagramDraft(row)
+      setHistory(current => current.filter(item => item.id !== row.id))
+      if (draft.id === row.id) { setDraft(freshDraft()); setDirty(true); setPreviewIndex(0); setReview(null); setReviewAccepted(false) }
+      setNotice('Borrador eliminado. Las fotografías originales se conservaron.')
+    } catch (failure) {
+      setError(failure.message)
+      try { const rows = await reload(); const current = rows.find(item => item.id === draft.id); if (current && !dirty) setDraft(current) } catch { /* Keep the saved record available for recovery. */ }
+    } finally { setBusy(false) }
+  }
   async function checkAccess() {
     setBusy(true); setError(''); setNotice('Verificando acceso de publicación sin modificar el borrador…')
     try {
@@ -157,6 +171,7 @@ export default function InstagramComposer() {
           <button className="admin-button" type="button" disabled={locked || !dirty} onClick={save}>Guardar borrador</button>
           <button className="admin-button" type="button" disabled={busy || dirty || !draft.revision || !['draft', 'preparing'].includes(draft.status)} onClick={prepare}>{draft.status === 'preparing' ? 'Continuar preparación' : 'Preparar imágenes y verificar permisos'}</button>
           <button className="admin-button admin-button--secondary" type="button" disabled={busy || dirty || !draft.revision} onClick={checkAccess}>Verificar permisos de publicación</button>
+          {canDelete(draft) && <button className="admin-button instagram-delete" type="button" disabled={busy} onClick={() => removeDraft(draft)}>Eliminar borrador</button>}
           {draft.revision > 0 && draft.status !== 'draft' && !['publishing', 'published', 'publish_unknown'].includes(draft.status) && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={reset}>Limpiar preparación y editar</button>}
         </div>
       </section>
@@ -194,7 +209,7 @@ export default function InstagramComposer() {
       <section className="admin-form-section">
         <div className="admin-form-section__heading"><h2>Historial</h2><p>Últimos 50 borradores y publicaciones.</p></div>
         <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={async () => { try { await reload(); setError('') } catch (failure) { setError(failure.message) } }}>Actualizar historial</button>
-        <div className="instagram-history">{history.map((row) => <article key={row.id}><div><strong>{stateNames[row.status] || row.status}</strong><p>{row.products.map((product) => product.name).join(', ')}</p><small>{new Date(row.created_at).toLocaleString('es-MX')} · {row.image_ids.length} foto(s)</small>{row.error_code && <p>{instagramErrorMessage(row.error_code)}</p>}</div><button type="button" disabled={busy} onClick={() => open(row)}>Abrir borrador</button></article>)}</div>
+        <div className="instagram-history">{history.map((row) => <article key={row.id}><div><strong>{stateNames[row.status] || row.status}</strong><p>{row.products.map((product) => product.name).join(', ')}</p><small>{new Date(row.created_at).toLocaleString('es-MX')} · {row.image_ids.length} foto(s)</small>{row.error_code && <p>{instagramErrorMessage(row.error_code)}</p>}</div><div className="instagram-actions"><button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => open(row)}>Abrir borrador</button>{canDelete(row) && <button className="admin-button instagram-delete" type="button" disabled={busy} onClick={() => removeDraft(row)}>Eliminar borrador</button>}</div></article>)}</div>
         {!loading && !history.length && <p>Aún no hay borradores guardados.</p>}
       </section>
     </div>

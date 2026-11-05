@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase'
 import { catalogImageUrl, validatePublicMediaUrl } from '../utils/instagram'
 
 const messages = {
+  DRAFT_HAS_PUBLICATION: 'Este registro tiene un intento de publicación. Se conserva para evitar duplicados y poder consultar su resultado.',
   INSTAGRAM_ACCOUNT_CHANGED: 'La cuenta de Instagram ya no coincide con la preparación guardada. Revisa la conexión y vuelve a preparar antes de publicar.',
   INVALID_MEDIA_ORIGIN: 'La configuración multimedia debe usar un origen HTTPS de Supabase, sin credenciales ni parámetros.',
   PUBLISHING_DISABLED: 'La publicación real está deshabilitada en esta etapa.',
@@ -89,6 +90,11 @@ export async function prepareInstagramDraft(draft, action, imageId, body) {
   const data = await invokeInstagramPreparation(draft, action, imageId, body)
   if (!data?.draft) throw new Error(messages.OPERATION_FAILED)
   return data.draft
+}
+
+export async function deleteInstagramDraft(draft) {
+  const data = await invokeInstagramPreparation(draft, 'delete')
+  if (data?.deleted !== true) throw new Error('No se pudo confirmar la eliminación. Actualiza el historial.')
 }
 
 export async function checkInstagramPublishingAccess(draft) {

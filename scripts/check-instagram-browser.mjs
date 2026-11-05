@@ -55,6 +55,7 @@ try {
     if (url.pathname === '/functions/v1/instagram-prepare') {
       assert.equal(request.headers().authorization, `Bearer ${token}`)
       const action = url.searchParams.get('action')
+      if (action === 'delete') { draft = undefined; return respond({ deleted: true }) }
       if (action === 'check') return respond({ access: { account_id: '12345', username: 'prartjewelry', checked_at: new Date().toISOString() } })
       if (action === 'begin') {
         draft.status = 'preparing'
@@ -137,8 +138,20 @@ try {
   }, uploads[0].toString('base64'))
   assert.equal(info.width, 1080); assert.equal(info.height, 1080)
   assert.ok(info.corner.slice(0, 3).every((value) => value >= 250))
+  const editorWidth = await page.getByLabel('Descripción editable').evaluate(node => node.getBoundingClientRect().width)
+  assert.ok(editorWidth > 500, `desktop editor should use full width, got ${editorWidth}`)
+  const historyWidth = await page.locator('.instagram-history').evaluate(node => node.getBoundingClientRect().width)
+  assert.ok(historyWidth > 500, `desktop history should use full width, got ${historyWidth}`)
   await page.setViewportSize({ width: 390, height: 844 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'mobile overflow')
+  page.once('dialog', dialog => dialog.dismiss())
+  await page.getByRole('button', { name: 'Eliminar borrador', exact: true }).first().click()
+  assert.ok(draft)
+  page.once('dialog', dialog => dialog.accept())
+  await page.getByRole('button', { name: 'Eliminar borrador', exact: true }).first().click()
+  await page.getByText('Borrador eliminado. Las fotografías originales se conservaron.').waitFor()
+  assert.equal(draft, undefined)
+  assert.equal(await page.locator('.instagram-history article').count(), 0)
   assert.deepEqual(errors, [])
   console.log('Instagram browser checks passed: selection, ordering, save/reload/edit/reload, rendered photos and caption, saved snapshot, WebP → JPEG, preparation, review-gated publishing, cancel without sending, mobile layout. All remote responses simulated.')
 } finally { await browser.close(); await server.close() }

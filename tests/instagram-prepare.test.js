@@ -35,11 +35,15 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
     if (url.pathname === '/auth/v1/user') return Response.json({ id: 'admin-id', is_anonymous: anonymous })
     if (url.pathname === '/rest/v1/admin_users') return Response.json(isAdmin ? [{ user_id: 'admin-id' }] : [])
     if (url.pathname === '/rest/v1/instagram_posts') {
+      if (options.method === 'DELETE') {
+        if (!row || url.searchParams.get('status') !== `eq.${row.status}` || url.searchParams.get('revision') !== `eq.${row.revision}` || url.searchParams.get('updated_at') !== `eq.${row.updated_at}`) return Response.json([])
+        const removed = row; row = undefined; return Response.json([removed])
+      }
       if (options.method === 'PATCH') {
         if (url.searchParams.get('status') !== `eq.${row.status}` || url.searchParams.get('revision') !== `eq.${row.revision}` || url.searchParams.get('updated_at') !== `eq.${row.updated_at}`) return Response.json([])
         row = { ...row, ...JSON.parse(options.body), updated_at: new Date(Date.now() + ++tick).toISOString() }
       }
-      return Response.json([row])
+      return Response.json(row ? [row] : [])
     }
     if (url.hostname === 'graph.facebook.com') {
       assert.equal(options.method, undefined) // No Meta writes in this stage.
@@ -195,6 +199,35 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
       const before = calls.filter(({ options }) => options.method === 'DELETE').length
       assert.equal((await handler(request('reset'))).status, 400)
       assert.equal(calls.filter(({ options }) => options.method === 'DELETE').length, before)
+    })
+    await t.test('delete requires admin and never deletes published or attempted records', async () => {
+      resetRow()
+      assert.equal((await handler(request('delete', undefined, ''))).status, 401)
+      isAdmin = false; assert.equal((await handler(request('delete'))).status, 403); isAdmin = true
+      for (const status of ['publishing', 'published', 'publish_unknown', 'publish_failed']) {
+        row.status = status; assert.equal((await handler(request('delete'))).status, 409)
+      }
+      resetRow(); row.publish_attempt_id = 'attempt'
+      assert.equal((await handler(request('delete'))).status, 409)
+      assert.ok(row)
+    })
+    await t.test('delete cleans prepared copies first, preserves failed cleanup and permits safe retry', async () => {
+      resetRow(); await handler(request('begin')); await handler(request('upload', jpeg)); await handler(request('finish'))
+      deleteFails = true
+      assert.equal((await handler(request('delete'))).status, 503)
+      assert.equal(row.status, 'cleanup_failed'); assert.equal(objects.size, 1)
+      deleteFails = false
+      const deletion = request('delete')
+      assert.equal((await handler(deletion)).status, 200)
+      assert.equal(row, undefined); assert.equal(objects.size, 0)
+      assert.equal((await handler(request('delete', undefined, 'Bearer session', 1))).status, 200)
+      assert.ok(calls.filter(({ options }) => options.method === 'DELETE').every(({ url }) => !url.pathname.includes('product-images')))
+      resetRow()
+      assert.equal((await handler(request('delete', undefined, 'Bearer session', 99))).status, 409)
+      row.status = 'uploading'; assert.equal((await handler(request('delete'))).status, 409)
+      resetRow()
+      assert.equal((await handler(request('delete'))).status, 200)
+      assert.equal(row, undefined)
     })
   } finally { globalThis.fetch = previous.fetch; globalThis.Deno = previous.Deno }
 })

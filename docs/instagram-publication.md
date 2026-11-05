@@ -46,6 +46,18 @@ El frontend público requiere el despliegue habitual de GitHub Pages. No se hici
 
 ## Errores y recuperación
 
+### Eliminar borradores
+
+**Eliminar borrador** está disponible en el editor y en el historial para registros sin intentos de publicación. Pide confirmación, limpia primero los JPEG preparados y luego elimina el registro de PostgreSQL. Conserva las fotografías originales del catálogo. Si la limpieza falla, mantiene el registro y sus rutas para poder reintentar; una operación activa no puede eliminarse hasta que su bloqueo venza (10 minutos). Los registros publicados, en publicación o con resultados inciertos se conservan y no admiten esta eliminación.
+
+Esta operación requiere desplegar `instagram-prepare` actualizado:
+
+```bash
+npx supabase functions deploy instagram-prepare --use-api
+```
+
+No requiere migraciones ni cambios en RLS. El editor y el historial usan todo el ancho de sus secciones, con acciones apiladas en pantallas pequeñas.
+
 Si aparece **Resultado por conciliar**, usa **Consultar resultado sin reenviar**. Si Meta informa `PUBLISHED` pero se perdió el ID multimedia, el intento queda para revisión manual; no se inventa el enlace ni se vuelve a enviar. `FINISHED` después de un timeout tampoco es permiso para repetir la publicación.
 
 No copies un borrador con resultado incierto para volver a intentarlo: sería un registro distinto y podría duplicar contenido. La prevención de duplicados cubre el mismo intento, no publicaciones nuevas creadas deliberadamente con las mismas fotos.
