@@ -1,6 +1,5 @@
 import { createPublishHandler } from './handler.ts'
 
-// Remains null until the owner authorizes a specific prepared draft.
-// Activation requires a reviewed source change: ID, revision and account ID.
-// No environment variable or request parameter enables publication.
-Deno.serve(createPublishHandler(null))
+// Owner-authorized production publishing for @prartjewelry.
+// Every prepared draft requires administrator authentication and exact-content confirmation.
+Deno.serve(createPublishHandler({ account_id: '17841465479111585' }))

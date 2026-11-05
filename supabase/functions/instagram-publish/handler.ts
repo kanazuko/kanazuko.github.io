@@ -1,8 +1,8 @@
 import { authenticate, cors, database, json, limitedBytes, SafeError, safeFailure, uuid } from '../_shared/instagram.ts'
 import { advancePublication, confirmationDigest } from './engine.ts'
 
-type AuthorizedTrial = { id: string; revision: number; account_id: string }
-export function createPublishHandler(authorizedTrial: AuthorizedTrial | null = null) {
+type PublicationPolicy = { account_id: string; id?: string; revision?: number }
+export function createPublishHandler(policy: PublicationPolicy | null = null) {
   return async (request: Request) => {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
     if (request.method !== 'POST') return json({ error: { code: 'METHOD_NOT_ALLOWED' } }, 405)
@@ -10,14 +10,16 @@ export function createPublishHandler(authorizedTrial: AuthorizedTrial | null = n
       await authenticate(request)
       const url = new URL(request.url)
       const action = url.searchParams.get('action')
-      // A source-code allowlist is required. No request or environment flag enables writes.
-      if (action !== 'review' && !authorizedTrial) return json({ error: { code: 'PUBLISHING_DISABLED' } }, 423)
+      // Only server configuration grants access; every operation still requires admin Auth.
+      if (action !== 'review' && !policy) return json({ error: { code: 'PUBLISHING_DISABLED' } }, 423)
       const id = url.searchParams.get('id')
       const revision = Number(url.searchParams.get('revision'))
       if (!uuid(id) || !Number.isSafeInteger(revision) || revision < 1) throw new SafeError('INVALID_REQUEST')
       const [post] = await database(`instagram_posts?id=eq.${id}&select=*`)
       if (!post || post.revision !== revision) throw new SafeError('DRAFT_CONFLICT', 409)
-      const enabled = authorizedTrial?.id === id && authorizedTrial?.revision === revision && authorizedTrial?.account_id === post.instagram_account_id
+      const enabled = policy !== null && policy.account_id === post.instagram_account_id
+        && (policy.id === undefined || policy.id === id)
+        && (policy.revision === undefined || policy.revision === revision)
       if (action === 'review') {
         if (post.status !== 'prepared' || post.publish_attempt_id) throw new SafeError('DRAFT_CONFLICT', 409)
         return json({ review: { id, revision, account_id: post.instagram_account_id, username: 'prartjewelry', caption: post.caption, image_count: post.prepared_images.length, digest: await confirmationDigest(post), publishing_enabled: enabled } })

@@ -80,7 +80,7 @@ export default function InstagramComposer() {
       setNotice('Verificando archivos públicos y permisos…')
       current = await prepareInstagramDraft(current, 'finish')
       setDraft(current)
-      setNotice('Preparación completa. Revisa los JPEG finales en la vista previa. La publicación sigue deshabilitada.')
+      setNotice('Preparación completa. Revisa los JPEG finales y pulsa «Revisar antes de publicar» para confirmar el envío.')
       await reload()
     } catch (failure) {
       setNotice(''); setError(failure.message)
@@ -187,9 +187,9 @@ export default function InstagramComposer() {
           <p>Borrador {review.id} · revisión {review.revision} · {review.image_count} foto(s)</p>
           <p className="instagram-caption">{review.caption}</p>
           <label><input type="checkbox" checked={reviewAccepted} onChange={event => setReviewAccepted(event.target.checked)} />He revisado las fotografías, su orden y la descripción.</label>
-          <p>{reviewAccepted ? 'Revisión local marcada. Esto no autoriza ni envía una publicación.' : 'Revisa también todas las fotografías de la vista previa.'}</p>
+          <p>{reviewAccepted ? review.publishing_enabled ? 'Revisión completada. Pulsa «Publicar en Instagram» y confirma el envío.' : 'Revisión completada. El servidor no ha habilitado el envío para esta cuenta.' : 'Revisa también todas las fotografías de la vista previa.'}</p>
         </div>}
-        <p id="instagram-publish-lock">{review?.publishing_enabled ? 'Este borrador está autorizado para la prueba. Publicar requiere revisar el contenido y confirmar el envío.' : 'La publicación real está deshabilitada hasta autorizar expresamente la prueba. Preparar no crea contenedores ni publica contenido.'}</p>
+        <p id="instagram-publish-lock">{review?.publishing_enabled ? 'Publicación habilitada para @prartjewelry. Cada envío requiere tu confirmación.' : 'Abre un borrador preparado y pulsa «Revisar antes de publicar» para comprobar si puedes enviarlo. Preparar no publica contenido.'}</p>
       </section>
       <section className="admin-form-section">
         <div className="admin-form-section__heading"><h2>Historial</h2><p>Últimos 50 borradores y publicaciones.</p></div>

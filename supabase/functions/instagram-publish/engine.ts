@@ -39,7 +39,7 @@ async function verify(post: Post) {
   if (access.account_id !== post.instagram_account_id) throw new SafeError('INSTAGRAM_ACCOUNT_CHANGED', 409)
 }
 
-// One bounded step per call. Production's null trial allowlist blocks this module.
+// One bounded step per call, behind authenticated account-scoped authorization.
 export async function advancePublication(post: Post, action: 'start' | 'continue' | 'reconcile', digest?: string): Promise<Post> {
   if (post.status === 'published') return post
   if (action === 'reconcile') {

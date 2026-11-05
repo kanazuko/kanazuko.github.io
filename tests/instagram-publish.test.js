@@ -48,6 +48,27 @@ test('publication engine with simulated Meta only', async t => {
   const start = async () => advancePublication(structuredClone(row), 'start', await confirmationDigest(row))
   const next = async () => advancePublication(structuredClone(row), 'continue')
   try {
+    await t.test('production entrypoint enables different drafts for the fixed account, but requires admin and confirmation', async () => {
+      let handler
+      globalThis.Deno.serve = value => { handler = value }
+      await import('../supabase/functions/instagram-publish/index.ts')
+      for (const id of ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222']) {
+        reset(); row.id = id; row.instagram_account_id = '17841465479111585'; account = row.instagram_account_id
+        row.prepared_images = row.prepared_images.map(image => ({ ...image, path: `${id}/1/${image.image_id}.jpg` }))
+        const request = (action, digest, auth = 'Bearer simulated') => new Request(`https://function.invalid?id=${id}&revision=1&action=${action}`, { method: 'POST', headers: auth ? { Authorization: auth } : {}, body: JSON.stringify({ digest }) })
+        assert.equal((await handler(request('review', '', ''))).status, 401)
+        admin = false; assert.equal((await handler(request('review'))).status, 403); admin = true
+        const review = (await (await handler(request('review'))).json()).review
+        assert.equal(review.publishing_enabled, true)
+        assert.equal((await handler(request('start', 'bad'))).status, 409)
+        assert.equal((await handler(request('start', review.digest))).status, 200)
+        for (let step = 0; step < 4; step++) assert.equal((await handler(request('continue'))).status, 200)
+        assert.equal(row.status, 'published'); assert.equal(writes.length, 2)
+      }
+      reset()
+      const request = new Request(`https://function.invalid?id=${row.id}&revision=1&action=start`, { method: 'POST', headers: { Authorization: 'Bearer simulated' }, body: JSON.stringify({ digest: await confirmationDigest(row) }) })
+      assert.equal((await handler(request)).status, 423); assert.equal(writes.length, 0)
+    })
     await t.test('integrated endpoint requires admin, source allowlist, exact revision and content confirmation', async () => {
       reset()
       const enabled = createPublishHandler({ id: row.id, revision: 1, account_id: '123' })

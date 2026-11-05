@@ -1,5 +1,7 @@
 # Instagram: borradores y preparación manual
 
+> **Actualización del 5 de noviembre de 2026:** el propietario autorizó la publicación manual en producción para todos los borradores preparados de @prartjewelry. Consulta [el flujo vigente](instagram-publication.md). Las referencias al bloqueo y a una futura autorización en este documento describen la etapa previa y ya no aplican a la función de producción.
+
 Consulta también la [auditoría funcional y de seguridad](instagram-audit.md), con evidencia de PostgreSQL Cloud, validación de los archivos públicos y los pasos pendientes antes de publicar.
 
 Esta etapa implementa selección de productos/fotos, orden, descripción, vista previa, guardado y preparación de imágenes con comprobación de acceso a publicación. **No publica contenido.** En su configuración actual, `instagram-publish` permite únicamente una revisión autenticada de la versión preparada (`action=review`); cualquier intento de envío responde `423 PUBLISHING_DISABLED`. No hay una variable de entorno ni un parámetro de petición que quite el bloqueo. El [motor de publicación y sus límites de activación](instagram-publication.md) ya tienen pruebas simuladas y requieren una autorización de prueba concreta en código antes de activarse.

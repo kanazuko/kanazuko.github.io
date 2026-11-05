@@ -50,7 +50,7 @@ try {
     if (url.pathname === '/functions/v1/instagram-publish') {
       assert.equal(request.headers().authorization, `Bearer ${token}`)
       assert.equal(url.searchParams.get('action'), 'review')
-      return respond({ review: { id: draft.id, revision: draft.revision, account_id: '12345', username: 'prartjewelry', caption: draft.caption, image_count: draft.image_ids.length, digest: 'simulated', publishing_enabled: false } })
+      return respond({ review: { id: draft.id, revision: draft.revision, account_id: '17841465479111585', username: 'prartjewelry', caption: draft.caption, image_count: draft.image_ids.length, digest: 'simulated', publishing_enabled: true } })
     }
     if (url.pathname === '/functions/v1/instagram-prepare') {
       assert.equal(request.headers().authorization, `Bearer ${token}`)
@@ -121,7 +121,11 @@ try {
   await review.waitFor()
   assert.equal(await review.locator('.instagram-caption').textContent(), draft.caption)
   await page.getByLabel('He revisado las fotografías, su orden y la descripción.').check()
-  assert.equal(await page.getByRole('button', { name: 'Publicar en Instagram', exact: true }).isDisabled(), true)
+  assert.equal(await page.getByRole('button', { name: 'Publicar en Instagram', exact: true }).isDisabled(), false)
+  const requestsBeforeCancel = remoteCalls.length
+  page.once('dialog', dialog => dialog.dismiss())
+  await page.getByRole('button', { name: 'Publicar en Instagram', exact: true }).click()
+  assert.equal(remoteCalls.length, requestsBeforeCancel, 'cancel must never send a publication request')
   assert.equal(JSON.stringify(draft), beforeAccessCheck)
   // Inspect the real browser-produced JPEG dimensions and white letterboxing.
   const info = await page.evaluate(async (data) => {
@@ -136,5 +140,5 @@ try {
   await page.setViewportSize({ width: 390, height: 844 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'mobile overflow')
   assert.deepEqual(errors, [])
-  console.log('Instagram browser checks passed: selection, ordering, save/reload/edit/reload, rendered photos and caption, saved snapshot, WebP → JPEG, preparation, disabled publish, mobile layout. All remote responses simulated.')
+  console.log('Instagram browser checks passed: selection, ordering, save/reload/edit/reload, rendered photos and caption, saved snapshot, WebP → JPEG, preparation, review-gated publishing, cancel without sending, mobile layout. All remote responses simulated.')
 } finally { await browser.close(); await server.close() }

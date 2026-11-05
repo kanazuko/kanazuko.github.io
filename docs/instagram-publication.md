@@ -1,61 +1,67 @@
-# Motor de publicación: implementación sin activación
+# Publicación manual en producción
 
-Actualizado el 5 de noviembre de 2026. El administrador confirmó mediante la interfaz que Meta devolvió acceso y cuota para @prartjewelry, ID `17841465479111585`. Ese resultado corresponde al momento de la consulta; se vuelve a verificar antes del futuro envío.
+El propietario autorizó el 5 de noviembre de 2026 publicar cualquier borrador preparado en **@prartjewelry**, cuenta `17841465479111585`. Ya no hay restricción por ID de borrador ni revisión de prueba. Se mantiene la confirmación explícita de cada contenido y el acceso exclusivo de administradores.
 
-## Qué puedes hacer ahora
+## Cómo publicar
 
-No necesitas agregar permisos ni crear una página de Facebook para continuar esta etapa. Puedes desplegar los cambios siguientes y revisar un borrador preparado. **El despliegue no habilita publicaciones.** No se aplicaron migraciones remotas, despliegues, commits ni pushes durante este desarrollo.
+1. Abre `/#/admin/instagram` con tu sesión administrativa.
+2. Guarda y prepara el contenido. La preparación convierte y verifica los JPEG y comprueba acceso/cuota; no crea contenedores en Meta.
+3. Pulsa **Revisar antes de publicar**. Comprueba todas las fotografías, su orden y la descripción. Marca **He revisado las fotografías, su orden y la descripción**.
+4. Pulsa **Publicar en Instagram** y acepta la confirmación. Esto reserva un intento para la versión revisada y comprueba nuevamente archivos, cuenta y permisos.
+5. Pulsa **Continuar intento confirmado** para avanzar los pasos: crear contenedores, consultar su estado, enviar y recuperar el enlace. Cada clic ejecuta un paso; no hay reintentos automáticos de escrituras. Si Meta sigue procesando una imagen, espera un minuto entre consultas.
+6. El historial mostrará el resultado. Al completarse, abre **Ver publicación en Instagram**.
 
-Desde la raíz del proyecto vinculado:
+La casilla por sí sola no publica. Si ya la habías marcado antes del despliegue, vuelve a pulsar **Revisar antes de publicar** para obtener el estado actual del servidor y márcala nuevamente. El contenido debe estar preparado y sin modificaciones pendientes.
+
+Las descripciones se envían literalmente como texto, sin interpretar Markdown. Revisa asteriscos y barras antes de confirmar si no quieres que formen parte del texto.
+
+## Despliegue y comprobación
+
+La función de entrada configura `createPublishHandler({ account_id: '17841465479111585' })`. La política vive exclusivamente en el servidor. Ningún parámetro del navegador puede habilitar otra cuenta.
 
 ```bash
-npx supabase db push --dry-run
+npx supabase functions deploy instagram-publish --use-api
 ```
 
-Revisa que las migraciones pendientes sean las esperadas. La nueva de esta entrega es `20261105010000_instagram_publish_progress.sql`; añade un objeto JSON de progreso, sin cambiar RLS, grants ni migraciones aplicadas. Después:
+Conserva `verify_jwt = true`. No cambies ni copies el secreto Meta. La comprobación de Cloud confirmó que `publish_progress` existe, RLS está activo y `authenticated` no puede actualizar directamente el historial. Esta activación no necesita una migración adicional.
+
+Para usar los textos actualizados localmente:
 
 ```bash
-npx supabase db push
-npx supabase functions deploy instagram-publish --use-api
 npm run dev
 ```
 
-No uses `--no-verify-jwt`. No hace falta reemplazar el secreto Meta ni desplegar nuevamente `instagram-status` o `instagram-prepare` por estos cambios. Para el sitio público, publica el frontend por el procedimiento habitual de GitHub Pages.
+El frontend público requiere el despliegue habitual de GitHub Pages. No se hicieron commits ni pushes automáticos. El frontend anterior que ya tenía revisión y confirmación puede obtener `publishing_enabled: true` al repetir la revisión, aunque sus textos antiguos hablen de pruebas.
 
-En `/#/admin/instagram`, abre un registro preparado y pulsa **Revisar antes de publicar**. Verás cuenta, ID, revisión, número de imágenes y texto obtenidos desde PostgreSQL a través de la función autenticada. Revisa las fotografías y su orden en la vista previa. La casilla es una revisión local; no guarda consentimiento ni activa el envío. El botón de publicación permanece deshabilitado.
+## Controles conservados
 
-## Implementación y seguridad
+- Supabase Auth y `admin_users` se comprueban antes del acceso privilegiado. La política de producción verifica el ID de la cuenta; Meta verifica además el username y acceso efectivo.
+- Confirmación ligada al digest de ID, revisión, cuenta, formato, descripción y manifiesto ordenado. El digest no sustituye la sesión ni los permisos.
+- Reserva atómica del intento y bloqueos por revisión, estado y fecha. No se puede iniciar otro envío del mismo registro después de reservarlo.
+- JPEG públicos HTTPS verificados por tamaño y SHA-256, conservando originales. Cuenta, cuota y acceso se verifican nuevamente antes del envío.
+- Los hijos del carrusel se guardan y se comprueba `FINISHED` antes de crear el padre. El contenedor final debe estar listo antes de publicar.
+- Unified Login, `graph.facebook.com/v26.0`, permisos `instagram_basic` e `instagram_content_publish`. Tokens exclusivamente en encabezados del backend; sin logs ni credenciales en React.
+- Antes de `media_publish` se persiste `publish_unknown`. Un timeout, respuesta perdida o error no desencadena otro envío automático.
+- El ID multimedia y la fecha se guardan antes de consultar el permalink. Un fallo de metadatos permite repetir solo su lectura, sin volver a publicar.
 
-- `instagram-publish/index.ts` configura `createPublishHandler(null)`: ninguna prueba autorizada. El handler valida sesión y membresía administrativa antes de consultar PostgreSQL. En esta configuración solo admite revisión de una versión preparada sin intento anterior; el resto devuelve 423. Ningún campo enviado por React puede habilitar el motor. Las acciones `start`, `continue` y `reconcile` están implementadas y probadas con una autorización simulada.
-- `engine.ts` implementa pasos acotados: reserva atómica, verificación pública de JPEG/hash y cuenta/cuota, creación individual o de hijos de carrusel, comprobación `FINISHED` de cada hijo, creación del padre, estado final, envío y recuperación del enlace. Usa `graph.facebook.com/v26.0`, con token exclusivamente en Authorization. Se mantienen los permisos Unified Login `instagram_basic` e `instagram_content_publish`.
-- La confirmación futura debe incluir el digest de ID, revisión, cuenta, formato, descripción y manifiesto ordenado. Es un control de versión, no una credencial ni sustituto de Auth.
-- Un intento único queda reservado antes de contactar Meta. Cada operación adquiere un bloqueo mediante comparación de revisión, estado y `updated_at`. Los IDs de hijos quedan persistidos antes de crear el padre. No se vuelve a usar un borrador con intento previo.
-- Antes de `media_publish`, se persiste `publish_unknown`. Una caída, timeout o respuesta inválida no permite volver a enviar. Un error de creación también bloquea el intento: puede existir un contenedor cuyo ID se perdió. No se crean reemplazos automáticamente.
-- Una respuesta exitosa persiste ID y fecha antes de buscar el permalink. Si falla esa lectura, puede repetirse solo el GET de metadatos. Se admite únicamente un enlace HTTPS de Instagram sin credenciales ni parámetros. Una advertencia de publicación parcial se conserva; no se interpreta como motivo para publicar de nuevo.
-- El polling de cada contenedor exige al menos un minuto entre consultas y permite hasta cinco consultas en ese ciclo. Una revisión final de `FINISHED` precede al envío. `ERROR`, `EXPIRED`, respuestas inesperadas o agotamiento requieren revisión.
-- Los JPEG se conservan vinculados al historial. El motor no altera originales ni elimina imágenes. RLS y los permisos existentes impiden que React modifique el registro de progreso.
+## Errores y recuperación
 
-## Límites de recuperación
+Si aparece **Resultado por conciliar**, usa **Consultar resultado sin reenviar**. Si Meta informa `PUBLISHED` pero se perdió el ID multimedia, el intento queda para revisión manual; no se inventa el enlace ni se vuelve a enviar. `FINISHED` después de un timeout tampoco es permiso para repetir la publicación.
 
-No se promete entrega exactamente una vez entre PostgreSQL y Meta: no comparten una transacción. Se prioriza evitar reenvíos ambiguos. Si se pierde una respuesta de escritura o el proceso termina con un bloqueo activo, se requiere revisión del intento; no hay recuperación automática que cree contenedores o publique de nuevo.
+No copies un borrador con resultado incierto para volver a intentarlo: sería un registro distinto y podría duplicar contenido. La prevención de duplicados cubre el mismo intento, no publicaciones nuevas creadas deliberadamente con las mismas fotos.
 
-La conciliación implementada solo consulta el estado del contenedor conocido. `PUBLISHED` confirma que Meta lo publicó, pero no proporciona aquí un ID multimedia verificable: se guarda `PUBLISHED_ID_UNRESOLVED` y no se inventa un permalink ni se busca por descripción. `FINISHED` tras un timeout tampoco autoriza un reenvío. La recuperación de ID perdido y el desbloqueo de intentos fallidos requieren un procedimiento administrativo adicional, con evidencia de Meta. No copiar el borrador para reintentar un resultado incierto.
+Las respuestas perdidas al crear contenedores, procesos interrumpidos con bloqueo activo y errores no conciliables requieren revisión administrativa. PostgreSQL y Meta no comparten una transacción; no se promete entrega exactamente una vez. Los contenedores conocidos quedan registrados. El polling admite hasta cinco consultas por ciclo, separadas al menos un minuto. No se hacen reintentos ciegos al agotar el ciclo.
 
-## Qué falta antes de una prueba real
+Para suspender nuevos envíos, configurar `createPublishHandler(null)` y desplegar la función. Esto no elimina contenido ya publicado ni revierte operaciones en curso.
 
-1. Seleccionar y autorizar expresamente un borrador concreto, con sus imágenes, texto y cuenta destino.
-2. Con esa autorización, reemplazar exclusivamente el `null` de `createPublishHandler(null)` por un objeto con `id`, `revision` y `account_id` del borrador autorizado. No cambiar la verificación JWT ni aceptar estos datos como autorización desde el cliente. El motor y los controles del frontend ya están implementados; el servidor solo devolverá `publishing_enabled: true` para esa versión exacta.
-3. Mantener el resto bloqueado y volver a ejecutar las pruebas de autorización y concurrencia del endpoint integrado. Definir cómo se revisarán manualmente los estados inciertos antes de esa prueba.
-4. Desplegar esa activación revisada. Abrir y revisar el borrador, marcar la casilla y pulsar **Publicar en Instagram**; aparece una segunda confirmación explícita. Esto reserva el intento y comprueba imágenes/acceso/cuota. **Continuar intento confirmado** ejecuta un paso acotado cada vez: contenedores, consultas, envío y enlace. Si el contenedor sigue procesándose, esperar un minuto antes de continuar. No hay bucles de reintento de escrituras.
-5. Verificar el resultado en historial y en Instagram. Ante un resultado incierto, usar **Consultar resultado sin reenviar** y detener la prueba para revisión; no crear un duplicado. Al terminar, retirar la autorización de prueba restaurando `null` y desplegar nuevamente la función.
+## Verificación de esta activación
 
-## Verificación ejecutada
+- `npm run lint`, `npm run build`: correctos.
+- `npm test`: 51 pruebas correctas. Incluyen el entrypoint de producción con dos borradores distintos, rechazo de otra cuenta, usuarios no autorizados, confirmación requerida, concurrencia, carrusel y fallos parciales.
+- `npm run test:instagram-browser`: correcto; revisión habilita el botón solo después de marcar la casilla, y cancelar la confirmación no envía ninguna petición.
+- Comprobación Deno del entrypoint: correcta.
+- `scripts/check-instagram-production.sql`: consulta de solo lectura para verificar esquema y permisos en Cloud.
 
-- `npm run lint` y `npm run build` correctos.
-- `npm test`: 50 pruebas correctas, incluyendo endpoint integrado con autorización simulada, concurrencia de reserva, individual/carrusel ordenado, respuestas perdidas, recuperación de metadatos, cuenta cambiada, integridad, bloqueo de publicación, revisión autenticada y migración/RLS en PGlite.
-- `npm run test:instagram-browser`: correcto, con revisión de la versión guardada, casilla sin envío, publicación bloqueada, fotos reales renderizadas y conversión JPEG. Toda la red externa interceptada.
-- `npx --yes --package deno deno check --config supabase/functions/instagram-prepare/deno.json supabase/functions/instagram-publish/index.ts`: correcto.
+Las pruebas sustituyen todas las escrituras a Meta. No se leyó el secreto ni se crearon contenedores o publicaciones durante el desarrollo. La primera publicación real debe comprobarse desde el panel y en Instagram; estas pruebas no demuestran que Meta haya publicado contenido.
 
-Estas pruebas no crean contenedores ni validan una publicación real. No se leyó el secreto Meta. La revisión manual del código comprobó que la configuración desplegable bloquea el motor, que la autorización precede al acceso privilegiado y que no se introducen credenciales en React ni logs.
-
-Referencias oficiales consultadas: [publicación y requisitos Unified Login](https://developers.facebook.com/documentation/instagram-platform/content-publishing), [media_publish y respuestas parciales](https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user/media_publish). La referencia de media_publish contiene requisitos del login anterior; se usa la tabla específica de Unified Login de la guía para permisos y tipo de token, sin agregar requisitos de páginas.
+Referencias oficiales: [publicación y requisitos Unified Login](https://developers.facebook.com/documentation/instagram-platform/content-publishing), [media_publish](https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user/media_publish).
