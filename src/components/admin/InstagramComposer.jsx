@@ -5,6 +5,9 @@ import { advanceInstagramPublication, checkInstagramPublishingAccess, deleteInst
 
 const freshDraft = () => ({ id: crypto.randomUUID(), revision: 0, mode: 'single', product_ids: [], image_ids: [], caption: '', template: DEFAULT_INSTAGRAM_TEMPLATE, status: 'draft', prepared_images: [] })
 const canDelete = row => row.revision > 0 && !row.publish_attempt_id && !row.container_id && !row.instagram_id && ['draft', 'preparing', 'prepared', 'preparation_failed', 'cleanup_failed', 'cleaning', 'uploading'].includes(row.status)
+const canCancel = row => row.status === 'publishing' && row.publish_progress?.phase === 'creating' && !row.container_id && !row.instagram_id && Array.isArray(row.publish_progress.children) && row.publish_progress.children.length === 0
+const canContinue = row => row.status === 'publishing' && !row.instagram_id && ['creating', 'waiting', 'ready'].includes(row.publish_progress?.phase)
+const displayState = row => row.instagram_id ? 'Publicado' : canCancel(row) ? 'Pendiente de continuar · aún sin envío' : stateNames[row.status] || row.status
 const stateNames = { draft: 'Borrador', preparing: 'Preparación incompleta', uploading: 'Operación en curso', prepared: 'Preparado', preparation_failed: 'Preparación fallida', cleaning: 'Limpiando', cleanup_failed: 'Limpieza pendiente', publishing: 'Publicando', publish_unknown: 'Resultado por conciliar', published: 'Publicado', publish_failed: 'Publicación fallida' }
 
 export default function InstagramComposer() {
@@ -116,13 +119,15 @@ export default function InstagramComposer() {
       setNotice(`Acceso de publicación y cuota disponibles para @${access.username} (ID ${access.account_id}), comprobados el ${new Date(access.checked_at).toLocaleString('es-MX')}. No se creó contenido en Meta.`)
     } catch (failure) { setNotice(''); setError(failure.message) } finally { setBusy(false) }
   }
-  async function publishStep(action) {
+  async function publishStep(action, target = draft) {
+    if (target.id !== draft.id && dirty && (draft.product_ids.length || draft.caption) && !window.confirm('¿Descartar los cambios sin guardar para abrir este registro?')) return
+    if (action === 'cancel' && !window.confirm('¿Cancelar este intento antes del envío? Volverá a Preparado y podrás eliminar el borrador.')) return
     if (action === 'start' && (!reviewAccepted || !review?.publishing_enabled || !window.confirm(`¿Publicar este borrador, revisión ${draft.revision}, en @prartjewelry? Esta acción enviará el contenido a Instagram.`))) return
     setBusy(true); setError(''); setNotice('Procesando un paso del intento…')
     try {
-      const current = await advanceInstagramPublication(draft, action, review?.digest)
-      setDraft(current); setReview(null); setReviewAccepted(false)
-      setNotice(current.status === 'published' ? 'Publicación confirmada por Meta.' : 'Paso guardado. Revisa el estado antes de continuar. No cierres ni dupliques el intento.')
+      const current = await advanceInstagramPublication(target, action, review?.digest)
+      setDraft(current); setDirty(false); setReview(null); setReviewAccepted(false)
+      setNotice(action === 'cancel' ? 'Intento cancelado antes del envío. Puedes continuar editando o eliminar el borrador.' : current.status === 'published' ? 'Publicación confirmada por Meta.' : 'Paso guardado. Revisa el estado antes de continuar. No cierres ni dupliques el intento.')
       await reload()
     } catch (failure) {
       setNotice(''); setError(failure.message)
@@ -139,7 +144,7 @@ export default function InstagramComposer() {
     <div className="instagram-workspace">
       <section className="admin-form-section">
         <div className="admin-form-section__heading"><h2>Preparar publicación</h2><p>Guarda un borrador y prepara sus imágenes antes de publicar.</p></div>
-        <p><strong>Estado:</strong> {stateNames[draft.status] || draft.status}{dirty ? ' · cambios sin guardar' : ''}</p>
+        <p><strong>Estado:</strong> {displayState(draft)}{dirty ? ' · cambios sin guardar' : ''}</p>
         <button className="admin-button admin-button--secondary" type="button" disabled={busy || loading} onClick={() => { if (!dirty || (!draft.product_ids.length && !draft.caption) || window.confirm('¿Descartar los cambios sin guardar?')) { setDraft(freshDraft()); setDirty(true); setPreviewIndex(0); setError(''); setNotice('') } }}>Nuevo borrador</button>
         <fieldset disabled={locked} className="instagram-fields">
           <legend>Productos y fotografías</legend>
@@ -193,6 +198,8 @@ export default function InstagramComposer() {
           <button className="admin-button" type="button" disabled={busy} onClick={() => publishStep('continue')}>Continuar intento confirmado</button>
         </div>}
         {draft.status === 'publish_unknown' && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('reconcile')}>Consultar resultado sin reenviar</button>}
+        {canCancel(draft) && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('cancel')}>Cancelar intento sin enviar</button>}
+        {draft.instagram_id && !draft.instagram_url && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('reconcile')}>Recuperar enlace sin reenviar</button>}
         <button className="admin-button admin-button--secondary" type="button" disabled={busy || dirty || draft.status !== 'prepared'} onClick={async () => {
           setBusy(true); setError(''); setReview(null); setReviewAccepted(false)
           try { setReview(await reviewInstagramPublication(draft)) } catch (failure) { setError(failure.message) } finally { setBusy(false) }
@@ -209,7 +216,16 @@ export default function InstagramComposer() {
       <section className="admin-form-section">
         <div className="admin-form-section__heading"><h2>Historial</h2><p>Últimos 50 borradores y publicaciones.</p></div>
         <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={async () => { try { await reload(); setError('') } catch (failure) { setError(failure.message) } }}>Actualizar historial</button>
-        <div className="instagram-history">{history.map((row) => <article key={row.id}><div><strong>{stateNames[row.status] || row.status}</strong><p>{row.products.map((product) => product.name).join(', ')}</p><small>{new Date(row.created_at).toLocaleString('es-MX')} · {row.image_ids.length} foto(s)</small>{row.error_code && <p>{instagramErrorMessage(row.error_code)}</p>}</div><div className="instagram-actions"><button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => open(row)}>Abrir borrador</button>{canDelete(row) && <button className="admin-button instagram-delete" type="button" disabled={busy} onClick={() => removeDraft(row)}>Eliminar borrador</button>}</div></article>)}</div>
+        <div className="instagram-history">{history.map((row) => <article key={row.id}>
+          <div><strong>{displayState(row)}</strong><p>{row.products.map((product) => product.name).join(', ')}</p><small>{new Date(row.created_at).toLocaleString('es-MX')} · {row.image_ids.length} foto(s)</small>{row.error_code && <p>{instagramErrorMessage(row.error_code)}</p>}</div>
+          <div className="instagram-actions">
+            <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => open(row)}>Abrir borrador</button>
+            {canContinue(row) && <button className="admin-button" type="button" disabled={busy} onClick={() => publishStep('continue', row)}>Continuar publicación</button>}
+            {canCancel(row) && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('cancel', row)}>Cancelar intento sin enviar</button>}
+            {row.instagram_id && !row.instagram_url && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('reconcile', row)}>Recuperar enlace sin reenviar</button>}
+            {canDelete(row) && <button className="admin-button instagram-delete" type="button" disabled={busy} onClick={() => removeDraft(row)}>Eliminar borrador</button>}
+          </div>
+        </article>)}</div>
         {!loading && !history.length && <p>Aún no hay borradores guardados.</p>}
       </section>
     </div>

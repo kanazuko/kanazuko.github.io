@@ -25,14 +25,14 @@ export function createPublishHandler(policy: PublicationPolicy | null = null) {
         return json({ review: { id, revision, account_id: post.instagram_account_id, username: 'prartjewelry', caption: post.caption, image_count: post.prepared_images.length, digest: await confirmationDigest(post), publishing_enabled: enabled } })
       }
       if (!enabled) throw new SafeError('PUBLISHING_DISABLED', 423)
-      if (!['start', 'continue', 'reconcile'].includes(action || '')) throw new SafeError('INVALID_REQUEST')
+      if (!['start', 'continue', 'reconcile', 'cancel'].includes(action || '')) throw new SafeError('INVALID_REQUEST')
       let digest: string | undefined
       if (action === 'start') {
         const input = JSON.parse(new TextDecoder().decode(await limitedBytes(request, 1024)))
         if (typeof input.digest !== 'string' || !/^[a-f0-9]{64}$/.test(input.digest)) throw new SafeError('CONFIRMATION_REQUIRED', 409)
         digest = input.digest
       }
-      return json({ draft: await advancePublication(post, action as 'start' | 'continue' | 'reconcile', digest) })
+      return json({ draft: await advancePublication(post, action as 'start' | 'continue' | 'reconcile' | 'cancel', digest) })
     } catch (error) { return safeFailure(error) }
   }
 }

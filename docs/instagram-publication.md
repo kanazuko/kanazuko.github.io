@@ -46,6 +46,14 @@ El frontend público requiere el despliegue habitual de GitHub Pages. No se hici
 
 ## Errores y recuperación
 
+### Publicado sin enlace o intento pendiente
+
+Un ID multimedia devuelto por Meta confirma la publicación: el historial muestra **Publicado** inmediatamente, aunque la recuperación del permalink esté pendiente. **Recuperar enlace sin reenviar** solo hace una consulta GET y sirve también para los registros anteriores que quedaron en `publishing/metadata`.
+
+Los intentos en `creating`, sin contenedor, sin ID multimedia y con lista de hijos vacía, aún no ejecutaron una escritura a Meta. El historial ofrece **Continuar publicación** o **Cancelar intento sin enviar**. Cancelar devuelve el registro a Preparado y permite eliminarlo o limpiar su preparación para editarlo. El servidor verifica ese punto de control y toma el bloqueo mediante comparación atómica; no admite cancelar una operación activa, con hijos creados o con resultado incierto.
+
+El 5 de noviembre se diagnosticaron dos intentos en ese punto previo al envío y un collar con ID multimedia ya guardado. `scripts/repair-instagram-published-status.sql` corrige únicamente el estado del collar, condicionado al ID y fase comprobados. No publica ni elimina contenido. Los otros intentos quedan a elección del administrador para continuar o cancelar.
+
 ### Eliminar borradores
 
 **Eliminar borrador** está disponible en el editor y en el historial para registros sin intentos de publicación. Pide confirmación, limpia primero los JPEG preparados y luego elimina el registro de PostgreSQL. Conserva las fotografías originales del catálogo. Si la limpieza falla, mantiene el registro y sus rutas para poder reintentar; una operación activa no puede eliminarse hasta que su bloqueo venza (10 minutos). Los registros publicados, en publicación o con resultados inciertos se conservan y no admiten esta eliminación.

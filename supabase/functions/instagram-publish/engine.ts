@@ -40,7 +40,21 @@ async function verify(post: Post) {
 }
 
 // One bounded step per call, behind authenticated account-scoped authorization.
-export async function advancePublication(post: Post, action: 'start' | 'continue' | 'reconcile', digest?: string): Promise<Post> {
+export async function advancePublication(post: Post, action: 'start' | 'continue' | 'reconcile' | 'cancel', digest?: string): Promise<Post> {
+  if (action === 'cancel') {
+    // This checkpoint is persisted before any remote write, or after known children.
+    // Only the empty checkpoint can be cancelled: never unlock an ambiguous write.
+    if (post.status !== 'publishing' || post.publish_progress.phase !== 'creating' || post.container_id || post.instagram_id || !Array.isArray(post.publish_progress.children) || post.publish_progress.children.length !== 0) throw new SafeError('MANUAL_REVIEW_REQUIRED', 409)
+    return patch(post, { status: 'prepared', publish_attempt_id: null, publish_started_at: null, publish_progress: {}, error_code: null })
+  }
+  // A returned media ID already proves publication. Metadata retrieval is GET-only
+  // and must remain available even after the row is labelled published.
+  if (numericId(post.instagram_id) && ['continue', 'reconcile'].includes(action)) {
+    const media = await graph(`${post.instagram_id}?fields=id,permalink`)
+    const link = new URL(media.permalink)
+    if (media.id !== post.instagram_id || link.protocol !== 'https:' || !['www.instagram.com', 'instagram.com'].includes(link.hostname) || link.username || link.password || link.search || link.hash) throw new SafeError('INVALID_PERMALINK', 502)
+    return patch(post, { status: 'published', instagram_url: link.href, error_code: post.publish_progress.warning || null, publish_progress: { ...post.publish_progress, phase: 'done' } })
+  }
   if (post.status === 'published') return post
   if (action === 'reconcile') {
     if (!['publishing', 'publish_unknown'].includes(post.status) || !numericId(post.container_id)) throw new SafeError('MANUAL_REVIEW_REQUIRED', 409)
@@ -95,7 +109,7 @@ export async function advancePublication(post: Post, action: 'start' | 'continue
       // Persist the uncertain state BEFORE the irreversible request. No path retries this phase.
       locked = await patch(locked, { status: 'publish_unknown', publish_progress: { ...progress, phase: 'sending' } })
       const result = await metaPost(post.instagram_account_id, 'media_publish', { creation_id: post.container_id })
-      return await patch(locked, { status: 'publishing', instagram_id: result.id, published_at: new Date().toISOString(), error_code: result.warning || null, publish_progress: { ...progress, phase: 'metadata', warning: result.warning } })
+      return await patch(locked, { status: 'published', instagram_id: result.id, published_at: new Date().toISOString(), error_code: result.warning || 'METADATA_PENDING', publish_progress: { ...progress, phase: 'metadata', warning: result.warning } })
     }
     if (!numericId(post.instagram_id)) throw new SafeError('MANUAL_REVIEW_REQUIRED', 409)
     const media = await graph(`${post.instagram_id}?fields=id,permalink`)

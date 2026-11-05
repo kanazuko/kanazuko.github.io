@@ -1,4 +1,4 @@
-export const DEFAULT_INSTAGRAM_TEMPLATE = '✨ {nombre}\n{precio}\n{descripcion}\n\nHaz tu pedido desde el enlace de nuestro perfil.\n#PRArtJewelry #Joyería'
+export const DEFAULT_INSTAGRAM_TEMPLATE = '✨ {nombre}\n{precio}\n{descripcion}\n\nHaz tu pedido desde el enlace de nuestro perfil.\nO con un mensaje al privado.\n#PRArtJewelry #Joyería'
 export const MAX_INSTAGRAM_IMAGES = 10 // Deliberately below Meta's current 20-image ceiling.
 export function generateInstagramCaption(products, template) {
   return products.map((product) => template.replace(/\{(nombre|precio|descripcion)\}/g, (_, key) => ({

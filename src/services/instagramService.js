@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase'
 import { catalogImageUrl, validatePublicMediaUrl } from '../utils/instagram'
 
 const messages = {
+  POLL_TOO_SOON: 'Meta todavía está procesando el contenido. Espera un minuto entre consultas y luego continúa.',
   DRAFT_HAS_PUBLICATION: 'Este registro tiene un intento de publicación. Se conserva para evitar duplicados y poder consultar su resultado.',
   INSTAGRAM_ACCOUNT_CHANGED: 'La cuenta de Instagram ya no coincide con la preparación guardada. Revisa la conexión y vuelve a preparar antes de publicar.',
   INVALID_MEDIA_ORIGIN: 'La configuración multimedia debe usar un origen HTTPS de Supabase, sin credenciales ni parámetros.',

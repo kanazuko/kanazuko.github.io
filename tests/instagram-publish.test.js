@@ -130,6 +130,26 @@ test('publication engine with simulated Meta only', async t => {
       metadataFailure = false; await next()
       assert.equal(row.status, 'published'); assert.equal(writes.length, 2)
     })
+    await t.test('a successful publish is published immediately; legacy metadata can reconcile without another send', async () => {
+      reset(); await start(); await next(); await next(); await next()
+      assert.equal(row.status, 'published'); assert.ok(row.instagram_id); assert.equal(row.instagram_url, undefined)
+      row.status = 'publishing' // Existing rows created by the previous implementation.
+      await advancePublication(row, 'reconcile')
+      assert.equal(row.status, 'published'); assert.ok(row.instagram_url); assert.equal(writes.length, 2)
+    })
+    await t.test('only a checkpoint before any container can be cancelled, including concurrent continuation', async () => {
+      reset(); await start()
+      const before = structuredClone(row)
+      await advancePublication(row, 'cancel')
+      assert.equal(row.status, 'prepared'); assert.equal(row.publish_attempt_id, null); assert.equal(writes.length, 0)
+      await assert.rejects(advancePublication(before, 'continue'), /DRAFT_CONFLICT/)
+      await start(); await next()
+      await assert.rejects(advancePublication(row, 'cancel'), /MANUAL_REVIEW_REQUIRED/)
+      reset('carousel'); await start(); await next(); await next()
+      await assert.rejects(advancePublication(row, 'cancel'), /MANUAL_REVIEW_REQUIRED/)
+      reset(); await start(); row.publish_progress.phase = 'working'
+      await assert.rejects(advancePublication(row, 'cancel'), /MANUAL_REVIEW_REQUIRED/)
+    })
     await t.test('integrity and account changes fail before container creation', async () => {
       reset(); corrupt = true; await assert.rejects(start(), /PUBLIC_IMAGE_UNAVAILABLE/); assert.equal(writes.length, 0)
       reset(); account = '456'; await assert.rejects(start(), /INSTAGRAM_ACCOUNT_CHANGED/); assert.equal(writes.length, 0)
