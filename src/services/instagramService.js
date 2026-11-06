@@ -42,7 +42,7 @@ const messages = {
 export function instagramErrorMessage(code) { return messages[code] || 'No se pudo completar la operación. Revisa la configuración e inténtalo de nuevo.' }
 
 export async function loadInstagramCatalog() {
-  const { data, error } = await supabase.from('products').select('id,name,price,description,images:product_images(id,product_id,storage_path,alt_text,sort_order)').order('name')
+  const { data, error } = await supabase.from('products').select('id,name,price,description,is_featured,category:categories!products_category_id_fkey(id,name),images:product_images(id,product_id,storage_path,alt_text,sort_order)').order('name')
   if (error) throw new Error('No se pudieron cargar los productos.')
   return data.map((product) => ({ ...product, images: product.images.sort((a, b) => a.sort_order - b.sort_order).map((image) => ({ ...image, url: catalogImageUrl(supabase, image) })) }))
 }
