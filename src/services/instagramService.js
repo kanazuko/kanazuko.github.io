@@ -53,6 +53,21 @@ export async function loadInstagramDrafts() {
   return data
 }
 
+// Separate from the 50-row history so older publications keep their marker.
+export async function loadInstagramPublishedProductIds() {
+  const ids = new Set()
+  const pageSize = 1000
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase.from('instagram_posts')
+      .select('id,product_ids')
+      .or('status.eq.published,instagram_id.not.is.null,instagram_url.not.is.null')
+      .order('id').range(offset, offset + pageSize - 1)
+    if (error) throw new Error('No se pudieron consultar los productos publicados en Instagram.')
+    for (const post of data) for (const id of post.product_ids) ids.add(id)
+    if (data.length < pageSize) return ids
+  }
+}
+
 export async function saveInstagramDraft(draft) {
   const { data, error } = await supabase.rpc('save_instagram_draft', {
     p_id: draft.id, p_revision: draft.revision, p_mode: draft.mode,

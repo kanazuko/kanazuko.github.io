@@ -36,3 +36,5 @@
 .instagram-history p { margin: .4rem 0; overflow-wrap: anywhere; }
 .instagram-history button { flex-shrink: 0; }
 .instagram-workspace button:disabled { opacity: .55; cursor: not-allowed; }
+
+.instagram-published-marker { display: inline-flex; justify-content: center; flex: 0 0 1.25rem; color: #287044; font-weight: 700; }

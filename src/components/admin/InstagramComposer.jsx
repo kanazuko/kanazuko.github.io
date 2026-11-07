@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import '../../instagram.css'
 import { DEFAULT_INSTAGRAM_TEMPLATE, createInstagramJpeg, generateInstagramCaption, selectPreviewImages, validateInstagramDraft } from '../../utils/instagram'
-import { advanceInstagramPublication, checkInstagramPublishingAccess, deleteInstagramDraft, instagramErrorMessage, loadInstagramCatalog, loadInstagramDrafts, preparedImageUrl, prepareInstagramDraft, reviewInstagramPublication, saveInstagramDraft, sourceImageUrl } from '../../services/instagramService'
+import { advanceInstagramPublication, checkInstagramPublishingAccess, deleteInstagramDraft, instagramErrorMessage, loadInstagramCatalog, loadInstagramDrafts, loadInstagramPublishedProductIds, preparedImageUrl, prepareInstagramDraft, reviewInstagramPublication, saveInstagramDraft, sourceImageUrl } from '../../services/instagramService'
 
 const freshDraft = () => ({ id: crypto.randomUUID(), revision: 0, mode: 'single', product_ids: [], image_ids: [], caption: '', template: DEFAULT_INSTAGRAM_TEMPLATE, status: 'draft', prepared_images: [] })
 const canDelete = row => row.revision > 0 && !row.publish_attempt_id && !row.container_id && !row.instagram_id && ['draft', 'preparing', 'prepared', 'preparation_failed', 'cleanup_failed', 'cleaning', 'uploading'].includes(row.status)
@@ -13,6 +13,7 @@ const stateNames = { draft: 'Borrador', preparing: 'Preparación incompleta', up
 export default function InstagramComposer() {
   const [catalog, setCatalog] = useState([])
   const [history, setHistory] = useState([])
+  const [publishedProductIds, setPublishedProductIds] = useState(new Set())
   const [draft, setDraft] = useState(freshDraft)
   const [dirty, setDirty] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -33,14 +34,15 @@ export default function InstagramComposer() {
   try { previewUrl = prepared ? preparedImageUrl(prepared.path) : previewImage ? sourceImageUrl(previewImage) : '' } catch { /* Invalid source paths are not rendered. */ }
 
   async function reload() {
-    const rows = await loadInstagramDrafts()
+    const [rows, publishedIds] = await Promise.all([loadInstagramDrafts(), loadInstagramPublishedProductIds()])
     setHistory(rows)
+    setPublishedProductIds(publishedIds)
     return rows
   }
   useEffect(() => {
     let active = true
-    Promise.all([loadInstagramCatalog(), loadInstagramDrafts()]).then(([items, rows]) => {
-      if (active) { setCatalog(items); setHistory(rows) }
+    Promise.all([loadInstagramCatalog(), loadInstagramDrafts(), loadInstagramPublishedProductIds()]).then(([items, rows, publishedIds]) => {
+      if (active) { setCatalog(items); setHistory(rows); setPublishedProductIds(publishedIds) }
     }).catch((failure) => { if (active) setError(failure.message) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [])
@@ -149,9 +151,10 @@ export default function InstagramComposer() {
         <fieldset disabled={locked} className="instagram-fields">
           <legend>Productos y fotografías</legend>
           <label>Buscar productos<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nombre del producto" /></label>
+          <small>✓ indica que el producto ya tiene una publicación en Instagram.</small>
           <div className="instagram-product-list">
             {catalog.filter((product) => product.name.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es'))).map((product) => (
-              <label key={product.id}><input type="checkbox" checked={draft.product_ids.includes(product.id)} disabled={!draft.product_ids.includes(product.id) && draft.product_ids.length >= 10} onChange={() => toggleProduct(product)} />{product.name} · ${Number(product.price).toFixed(2)} MXN</label>
+              <label key={product.id}><span className="instagram-published-marker" title={publishedProductIds.has(product.id) ? 'Publicado en Instagram' : undefined} role={publishedProductIds.has(product.id) ? 'img' : undefined} aria-label={publishedProductIds.has(product.id) ? 'Publicado en Instagram' : undefined} aria-hidden={publishedProductIds.has(product.id) ? undefined : true}>{publishedProductIds.has(product.id) ? '✓' : ''}</span><input type="checkbox" checked={draft.product_ids.includes(product.id)} disabled={!draft.product_ids.includes(product.id) && draft.product_ids.length >= 10} onChange={() => toggleProduct(product)} />{product.name} · ${Number(product.price).toFixed(2)} MXN</label>
             ))}
           </div>
           {products.map((product) => <div key={product.id}><h3>{product.name}</h3><div className="instagram-image-grid">
