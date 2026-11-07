@@ -21,10 +21,16 @@ export default function InstagramComposer() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [search, setSearch] = useState('')
+  const [productPriority, setProductPriority] = useState('name')
   const [previewIndex, setPreviewIndex] = useState(0)
   const [review, setReview] = useState(null)
   const [reviewAccepted, setReviewAccepted] = useState(false)
   const locked = busy || loading || draft.status !== 'draft'
+  const categories = [...new Map(catalog.filter(product => product.category).map(product => [product.category.id, product.category])).values()].sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  const priority = product => productPriority === 'featured' ? Boolean(product.is_featured) : productPriority === `category:${product.category?.id}`
+  const visibleProducts = catalog
+    .filter(product => product.name.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es')))
+    .sort((a, b) => Number(priority(b)) - Number(priority(a)) || a.name.localeCompare(b.name, 'es'))
   const products = catalog.filter((product) => draft.product_ids.includes(product.id))
   const images = catalog.flatMap((product) => product.images)
   const selectedImages = selectPreviewImages(draft, images, dirty)
@@ -152,10 +158,16 @@ export default function InstagramComposer() {
           <legend>Productos y fotografías</legend>
           <label>Buscar productos<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nombre del producto" /></label>
           <small>✓ indica que el producto ya tiene una publicación en Instagram.</small>
+          <label>Mostrar primero<select value={productPriority} onChange={event => setProductPriority(event.target.value)}>
+            <option value="name">Nombre (A–Z)</option>
+            <option value="featured">Destacados</option>
+            {categories.map(category => <option key={category.id} value={`category:${category.id}`}>Categoría: {category.name}</option>)}
+          </select></label>
           <div className="instagram-product-list">
-            {catalog.filter((product) => product.name.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es'))).map((product) => (
+            {visibleProducts.map((product) => (
               <label key={product.id}><span className="instagram-published-marker" title={publishedProductIds.has(product.id) ? 'Publicado en Instagram' : undefined} role={publishedProductIds.has(product.id) ? 'img' : undefined} aria-label={publishedProductIds.has(product.id) ? 'Publicado en Instagram' : undefined} aria-hidden={publishedProductIds.has(product.id) ? undefined : true}>{publishedProductIds.has(product.id) ? '✓' : ''}</span><input type="checkbox" checked={draft.product_ids.includes(product.id)} disabled={!draft.product_ids.includes(product.id) && draft.product_ids.length >= 10} onChange={() => toggleProduct(product)} />{product.name} · ${Number(product.price).toFixed(2)} MXN</label>
             ))}
+            {!loading && !visibleProducts.length && <p>No se encontraron productos.</p>}
           </div>
           {products.map((product) => <div key={product.id}><h3>{product.name}</h3><div className="instagram-image-grid">
             {product.images.map((image) => <label key={image.id} className="instagram-image-choice"><img src={image.url} alt={image.alt_text || product.name} loading="lazy" /><span><input type="checkbox" checked={draft.image_ids.includes(image.id)} disabled={!draft.image_ids.includes(image.id) && draft.image_ids.length >= 10} onChange={() => { change({ image_ids: draft.image_ids.includes(image.id) ? draft.image_ids.filter((id) => id !== image.id) : [...draft.image_ids, image.id] }); setPreviewIndex(0) }} />Seleccionar foto</span></label>)}

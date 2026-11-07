@@ -14,7 +14,8 @@ const browser = await chromium.launch({ executablePath, headless: true })
 const productId = '11111111-1111-4111-8111-111111111111'
 const adminId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const photos = ['22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333'].map((id, index) => ({ id, product_id: productId, storage_path: `products/${productId}/${index}.webp`, sort_order: index }))
-const product = { id: productId, name: 'Anillo de prueba', price: 125, description: 'Acero dorado', images: photos }
+const product = { id: productId, name: 'Anillo de prueba', price: 125, description: 'Acero dorado', images: photos, is_featured: false, category: { id: 'rings', name: 'Anillos' } }
+const catalog = [product, { id: 'other', name: 'Collar destacado', price: 200, images: [], is_featured: true, category: { id: 'necklaces', name: 'Collares' } }]
 let draft
 const remoteCalls = []
 const errors = []
@@ -38,7 +39,7 @@ try {
     if (url.hostname !== 'test.supabase.co') return route.abort()
     const respond = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
     if (url.pathname === '/rest/v1/admin_users') return respond({ user_id: adminId })
-    if (url.pathname === '/rest/v1/products') return respond([product])
+    if (url.pathname === '/rest/v1/products') return respond(catalog)
     if (url.pathname === '/rest/v1/instagram_posts') return respond(draft ? [draft] : [])
     if (url.pathname.includes('/public/product-images/')) return route.fulfill({ body: webp, contentType: 'image/webp', headers: { 'Access-Control-Allow-Origin': '*' } })
     if (url.pathname.includes('/public/instagram-prepared/')) return route.fulfill({ body: uploads[0], contentType: 'image/jpeg', headers: { 'Access-Control-Allow-Origin': '*' } })
@@ -74,9 +75,23 @@ try {
   })
   await page.goto('http://127.0.0.1:5181/#/admin/instagram')
   await page.getByLabel('Anillo de prueba ·').check()
+  const productRows = page.locator('.instagram-product-list label')
+  await page.getByLabel('Mostrar primero').selectOption('featured')
+  assert.match(await productRows.first().textContent(), /Collar destacado/)
+  await page.getByLabel('Mostrar primero').selectOption('category:rings')
+  assert.match(await productRows.first().textContent(), /Anillo de prueba/)
+  await page.getByLabel('Mostrar primero').selectOption('category:necklaces')
+  assert.match(await productRows.first().textContent(), /Collar destacado/)
+  assert.equal(await productRows.count(), 2)
+  await page.getByLabel('Buscar productos').fill('anillo')
+  assert.equal(await productRows.count(), 1)
+  assert.equal(await page.getByLabel('Anillo de prueba ·').isChecked(), true)
+  await page.getByLabel('Buscar productos').fill('')
+  await page.getByLabel('Mostrar primero').selectOption('name')
+  assert.match(await productRows.first().textContent(), /Anillo de prueba/)
   await page.getByLabel('Seleccionar foto').nth(0).check()
   await page.getByLabel('Seleccionar foto').nth(1).check()
-  await page.getByRole('combobox').selectOption('carousel')
+  await page.getByLabel('Formato').selectOption('carousel')
   await page.getByRole('button', { name: 'Subir foto 2' }).click()
   await page.getByRole('button', { name: 'Generar descripción' }).click()
   assert.match(await page.getByLabel('Descripción editable').inputValue(), /Acero dorado/)
@@ -95,7 +110,7 @@ try {
     })
   })
   assert.equal(await page.getByLabel('Descripción editable').inputValue(), unsavedCaption, 'returning to the tab must preserve unsaved text')
-  assert.equal(await page.getByRole('combobox').inputValue(), 'carousel')
+  assert.equal(await page.getByLabel('Formato').inputValue(), 'carousel')
   assert.equal(await page.getByLabel('Seleccionar foto').nth(0).isChecked(), true)
   assert.equal(await page.getByLabel('Seleccionar foto').nth(1).isChecked(), true)
   assert.equal(remoteCalls.filter(path => path === '/rest/v1/products').length, catalogLoads, 'tab return must not remount the editor')
