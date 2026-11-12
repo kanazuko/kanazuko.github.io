@@ -1,0 +1,681 @@
+diff --git a/scripts/archive-instagram-historical-attempt.sql b/scripts/archive-instagram-historical-attempt.sql
+new file mode 100644
+index 00000000..ef17b37b
+--- /dev/null
++++ b/scripts/archive-instagram-historical-attempt.sql
+@@ -0,0 +1,150 @@
++-- REVIEW TEMPLATE: NOT a migration, RPC or retryable publication operation.
++-- DO NOT execute unresolved placeholders or execute without separate approval.
++-- Render only through historical-closure.mjs after verified Auth + private backup.
++-- The privileged SQL transport is trusted. SQL cannot authenticate a JWT itself.
++-- READ COMMITTED deliberately refreshes reads after locks are acquired. A snapshot
++-- taken before waiting for a table lock must not hide a concurrent committed edit.
++BEGIN ISOLATION LEVEL READ COMMITTED;
++SET LOCAL lock_timeout = '5s';
++SET LOCAL statement_timeout = '15s';
++SET LOCAL idle_in_transaction_session_timeout = '30s';
++SET LOCAL search_path = '';
++SET LOCAL TIME ZONE 'UTC';
++
++DO $closure$
++DECLARE
++  v_actor uuid := '__VERIFIED_ACTOR_UUID__';
++  v_auth_until timestamptz := '__AUTH_VALID_UNTIL__';
++  v_backup_sha text := '__BACKUP_SHA256__';
++  v_id constant uuid := 'f7120683-6f03-43a6-bcf9-18a7ef5d69fe';
++  v_attempt constant uuid := '9723a05a-982c-43f5-9aac-00491fdcc032';
++  v_account constant text := '17841465479111585';
++  v_epoch constant uuid := '3cd91507-439a-4a97-85bc-1dac9d218856';
++  v_digest constant text := '76a89e0aef8a69018c916d29d50e0f951cf8d421cd3d19e46f8c80587cdc3b79';
++  v_before public.instagram_posts;
++  v_after public.instagram_posts;
++  v_control public.instagram_runtime_control;
++  v_control_before jsonb;
++  v_readiness_before jsonb;
++  v_others_before jsonb;
++  v_migrations_before jsonb;
++  v_event uuid;
++  v_count integer;
++BEGIN
++  IF v_auth_until <= clock_timestamp() OR v_auth_until > clock_timestamp() + interval '125 seconds' THEN
++    RAISE EXCEPTION 'CLOSURE_ADMIN_VERIFICATION_EXPIRED';
++  END IF;
++  IF v_backup_sha !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'CLOSURE_BACKUP_REQUIRED'; END IF;
++  PERFORM 1 FROM public.admin_users WHERE user_id = v_actor FOR KEY SHARE;
++  IF NOT FOUND THEN
++    RAISE EXCEPTION 'CLOSURE_ADMIN_REQUIRED';
++  END IF;
++  -- Control first, then account table, posts, events. No transaction spans HTTP.
++  SELECT * INTO STRICT v_control FROM public.instagram_runtime_control WHERE singleton FOR UPDATE;
++  IF v_control.schema_version <> 2 OR v_control.maintenance IS DISTINCT FROM true
++    OR v_control.frontend_ready IS DISTINCT FROM false OR v_control.deployment_epoch <> v_epoch THEN
++    RAISE EXCEPTION 'CLOSURE_RUNTIME_CHANGED';
++  END IF;
++  LOCK TABLE public.instagram_account_safety IN SHARE ROW EXCLUSIVE MODE;
++  LOCK TABLE public.instagram_posts IN SHARE ROW EXCLUSIVE MODE;
++  LOCK TABLE public.instagram_events IN SHARE ROW EXCLUSIVE MODE;
++  LOCK TABLE public.instagram_backend_readiness IN SHARE ROW EXCLUSIVE MODE;
++  LOCK TABLE supabase_migrations.schema_migrations IN SHARE MODE;
++  IF v_auth_until <= clock_timestamp() THEN RAISE EXCEPTION 'CLOSURE_ADMIN_VERIFICATION_EXPIRED'; END IF;
++  v_control_before := to_jsonb(v_control);
++  SELECT jsonb_agg(to_jsonb(r) ORDER BY function_name) INTO v_readiness_before
++    FROM public.instagram_backend_readiness r;
++  IF (SELECT count(*) FROM public.instagram_backend_readiness) <> 3 OR
++    EXISTS (SELECT 1 FROM public.instagram_backend_readiness
++      WHERE schema_version <> 2 OR deployment_epoch <> v_epoch) THEN
++    RAISE EXCEPTION 'CLOSURE_READINESS_CHANGED';
++  END IF;
++  SELECT jsonb_agg(to_jsonb(m) ORDER BY version) INTO v_migrations_before
++    FROM supabase_migrations.schema_migrations m;
++  IF (SELECT array_agg(version::text ORDER BY version) FROM supabase_migrations.schema_migrations)
++    IS DISTINCT FROM ARRAY['20261026214609','20261026215348','20261028120000','20261028130000',
++      '20261028140000','20261030120000','20261104120000','20261105010000','20261107010000','20261107020000'] THEN
++    RAISE EXCEPTION 'CLOSURE_HISTORY_CHANGED';
++  END IF;
++  IF EXISTS (SELECT 1 FROM public.instagram_events) OR EXISTS (SELECT 1 FROM public.instagram_account_safety) THEN
++    RAISE EXCEPTION 'CLOSURE_LEDGER_CHANGED';
++  END IF;
++  IF (SELECT count(*) FROM public.instagram_posts) <> 18 OR
++    (SELECT md5(coalesce(string_agg(to_jsonb(p)::text,chr(10) ORDER BY id),'')) FROM public.instagram_posts p)
++      <> '__EXPECTED_ALL_POSTS_MD5__' THEN
++    RAISE EXCEPTION 'CLOSURE_POSTS_CHANGED';
++  END IF;
++  SELECT * INTO STRICT v_before FROM public.instagram_posts WHERE id = v_id FOR UPDATE;
++  IF md5(to_jsonb(v_before)::text) <> '__EXPECTED_TARGET_MD5__'
++    OR v_before.publish_attempt_id IS DISTINCT FROM v_attempt
++    OR v_before.instagram_account_id IS DISTINCT FROM v_account
++    OR v_before.revision <> 1 OR v_before.status <> 'publishing'
++    OR v_before.updated_at <> '2026-11-07T06:28:09.495369Z'::timestamptz
++    OR v_before.publish_started_at IS DISTINCT FROM '2026-11-07T06:26:32.284Z'::timestamptz
++    OR v_before.mode <> 'carousel' OR jsonb_array_length(v_before.images) <> 2
++    OR jsonb_array_length(v_before.prepared_images) <> 2
++    OR v_before.container_id IS DISTINCT FROM '17931282783182638'
++    OR v_before.instagram_id IS NOT NULL OR v_before.instagram_url IS NOT NULL
++    OR v_before.published_at IS NOT NULL OR v_before.error_code IS NOT NULL
++    OR v_before.publish_progress IS DISTINCT FROM jsonb_build_object('phase','waiting',
++      'waiting_child',false,'polls',0,'digest',v_digest,
++      'children',jsonb_build_array('17931282594182638','17931282639182638')) THEN
++    RAISE EXCEPTION 'CLOSURE_TARGET_CHANGED';
++  END IF;
++  SELECT jsonb_agg(to_jsonb(p) ORDER BY id) INTO v_others_before
++    FROM public.instagram_posts p WHERE id <> v_id;
++
++  UPDATE public.instagram_posts SET status = 'publish_failed', error_code = 'ADMIN_ARCHIVED_BEFORE_PUBLISH'
++    WHERE id = v_id AND publish_attempt_id = v_attempt AND revision = 1
++      AND status = 'publishing' AND updated_at = v_before.updated_at
++    RETURNING * INTO STRICT v_after;
++  GET DIAGNOSTICS v_count = ROW_COUNT;
++  IF v_count <> 1 OR v_after.status <> 'publish_failed'
++    OR v_after.error_code <> 'ADMIN_ARCHIVED_BEFORE_PUBLISH'
++    OR v_after.updated_at <= v_before.updated_at
++    OR (to_jsonb(v_after) - ARRAY['status','error_code','updated_at'])
++      IS DISTINCT FROM (to_jsonb(v_before) - ARRAY['status','error_code','updated_at']) THEN
++    RAISE EXCEPTION 'CLOSURE_UNEXPECTED_POST_CHANGE';
++  END IF;
++  INSERT INTO public.instagram_events(actor_id,post_id,revision,attempt_id,account_id,
++    operation,digest,status_before,status_after,phase_before,phase_after,error_code,
++    trace_id,finished_at)
++    VALUES (v_actor,v_id,1,v_attempt,v_account,'admin_archive_before_publish',v_digest,
++      'publishing','publish_failed','waiting','waiting','ADMIN_ARCHIVED_BEFORE_PUBLISH',
++      'backup-sha256:' || v_backup_sha,clock_timestamp()) RETURNING id INTO v_event;
++
++  -- No exception handler: any error aborts everything, including audit insertion.
++  IF (SELECT count(*) FROM public.instagram_posts) <> 18
++    OR to_jsonb(v_after) IS DISTINCT FROM (SELECT to_jsonb(p) FROM public.instagram_posts p WHERE id=v_id)
++    OR v_others_before IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(p) ORDER BY id)
++      FROM public.instagram_posts p WHERE id <> v_id)
++    OR EXISTS (SELECT 1 FROM public.instagram_account_safety)
++    OR (SELECT count(*) FROM public.instagram_events) <> 1
++    OR v_control_before IS DISTINCT FROM (SELECT to_jsonb(c) FROM public.instagram_runtime_control c WHERE singleton)
++    OR v_readiness_before IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(r) ORDER BY function_name) FROM public.instagram_backend_readiness r)
++    OR v_migrations_before IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(m) ORDER BY version) FROM supabase_migrations.schema_migrations m) THEN
++    RAISE EXCEPTION 'CLOSURE_PRESERVATION_FAILED';
++  END IF;
++  IF NOT EXISTS (SELECT 1 FROM public.instagram_events WHERE id=v_event AND actor_id=v_actor
++    AND post_id=v_id AND revision=1 AND attempt_id=v_attempt AND account_id=v_account
++    AND operation='admin_archive_before_publish' AND digest=v_digest
++    AND status_before='publishing' AND status_after='publish_failed'
++    AND phase_before='waiting' AND phase_after='waiting'
++    AND error_code='ADMIN_ARCHIVED_BEFORE_PUBLISH'
++    AND trace_id='backup-sha256:' || v_backup_sha
++    AND method IS NULL AND endpoint IS NULL AND remote_id IS NULL
++    AND http_status IS NULL AND meta_code IS NULL AND meta_subcode IS NULL
++    AND container_status IS NULL AND resolution IS NULL AND finished_at IS NOT NULL) THEN
++    RAISE EXCEPTION 'CLOSURE_AUDIT_FAILED';
++  END IF;
++END;
++$closure$;
++
++-- Sanitized receipt from the same transaction; not proof of COMMIT on timeout.
++SELECT jsonb_build_object('post_id',p.id,'attempt_id',p.publish_attempt_id,'status',p.status,
++  'error_code',p.error_code,'updated_at',p.updated_at,'row_fingerprint',md5(to_jsonb(p)::text),
++  'posts_fingerprint',(SELECT md5(string_agg(to_jsonb(q)::text,chr(10) ORDER BY id)) FROM public.instagram_posts q),
++  'audit_event_id',(SELECT id FROM public.instagram_events WHERE operation='admin_archive_before_publish'),
++  'maintenance',true,'frontend_ready',false,'drain_verified',false) AS closure_receipt
++FROM public.instagram_posts p WHERE id='f7120683-6f03-43a6-bcf9-18a7ef5d69fe';
++COMMIT;
+diff --git a/scripts/instagram-closure-backup.sql b/scripts/instagram-closure-backup.sql
+new file mode 100644
+index 00000000..ff1fff65
+--- /dev/null
++++ b/scripts/instagram-closure-backup.sql
+@@ -0,0 +1,17 @@
++-- PREPARATION ONLY. Run remotely only after explicit authorization.
++-- Complete application snapshot, including captions/images: private output only.
++BEGIN READ ONLY;
++SET LOCAL TIME ZONE 'UTC';
++SELECT jsonb_build_object(
++  'project_ref','blsezjyhiholzwmqewef',
++  'read_only',current_setting('transaction_read_only'),
++  'observed_at',clock_timestamp(),
++  'posts',(SELECT jsonb_agg(jsonb_build_object('id',id,'row_json',to_jsonb(p)::text) ORDER BY id) FROM public.instagram_posts p),
++  'posts_fingerprint',(SELECT md5(coalesce(string_agg(to_jsonb(p)::text,chr(10) ORDER BY id),'')) FROM public.instagram_posts p),
++  'runtime',(SELECT to_jsonb(c) FROM public.instagram_runtime_control c WHERE singleton),
++  'readiness',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY function_name),'[]'::jsonb) FROM public.instagram_backend_readiness r),
++  'events',(SELECT coalesce(jsonb_agg(to_jsonb(e) ORDER BY id),'[]'::jsonb) FROM public.instagram_events e),
++  'safety',(SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY account_id),'[]'::jsonb) FROM public.instagram_account_safety s),
++  'migrations',(SELECT jsonb_agg(to_jsonb(m) ORDER BY version) FROM supabase_migrations.schema_migrations m)
++) AS closure_backup;
++ROLLBACK;
+diff --git a/scripts/historical-closure.mjs b/scripts/historical-closure.mjs
+new file mode 100644
+index 00000000..cbb2e002
+--- /dev/null
++++ b/scripts/historical-closure.mjs
+@@ -0,0 +1,164 @@
++// Local backup/preparation only. No management SQL-write client is implemented.
++import { createHash } from 'node:crypto'
++import { isDeepStrictEqual } from 'node:util'
++import { execFileSync } from 'node:child_process'
++import { chmod, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { isAbsolute, join, relative, sep } from 'node:path'
++import { pathToFileURL } from 'node:url'
++import { validateMaintenanceCredentials } from './check-instagram-maintenance.mjs'
++
++export const closureBaseline = Object.freeze({
++  project: 'blsezjyhiholzwmqewef', post: 'f7120683-6f03-43a6-bcf9-18a7ef5d69fe',
++  attempt: '9723a05a-982c-43f5-9aac-00491fdcc032', epoch: '3cd91507-439a-4a97-85bc-1dac9d218856',
++  targetMd5: 'eb5ae500290608fddf9b7675b3aae534', allMd5: '44eec1f11b52979b908bbe88478b50cd',
++})
++const hash = (value, algorithm = 'sha256') => createHash(algorithm).update(value).digest('hex')
++const uuid = value => /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value || '')
++const within = (root, path) => { const rel = relative(root, path); return rel === '' || (!rel.startsWith('..' + sep) && rel !== '..' && !isAbsolute(rel)) }
++
++export function checkBackupIntegrity(snapshot) {
++  const fields = ['project_ref','read_only','observed_at','posts','posts_fingerprint','runtime','readiness','events','safety','migrations']
++  if (!snapshot || snapshot.project_ref !== closureBaseline.project || snapshot.read_only !== 'on'
++    || Object.keys(snapshot).some(k => !fields.includes(k))
++    || !Array.isArray(snapshot.posts) || !snapshot.posts.length) throw new Error('CLOSURE_BACKUP_INVALID')
++  const ids = snapshot.posts.map(p => p.id)
++  if (new Set(ids).size !== ids.length || JSON.stringify(ids) !== JSON.stringify([...ids].sort())) throw new Error('CLOSURE_BACKUP_ORDER_INVALID')
++  for (const post of snapshot.posts) {
++    if (typeof post.row_json !== 'string' || JSON.parse(post.row_json).id !== post.id) throw new Error('CLOSURE_BACKUP_ROW_INVALID')
++  }
++  if (hash(snapshot.posts.map(p => p.row_json).join('\n'), 'md5') !== snapshot.posts_fingerprint) throw new Error('CLOSURE_BACKUP_CHECKSUM_FAILED')
++  for (const key of ['events', 'safety', 'readiness', 'migrations']) if (!Array.isArray(snapshot[key])) throw new Error('CLOSURE_BACKUP_INCOMPLETE')
++  if (!snapshot.runtime || !Number.isFinite(Date.parse(snapshot.observed_at))) throw new Error('CLOSURE_BACKUP_INCOMPLETE')
++  return snapshot
++}
++
++export function validateClosureSnapshot(snapshot) {
++  checkBackupIntegrity(snapshot)
++  const target = snapshot.posts.find(p => p.id === closureBaseline.post)
++  if (snapshot.posts.length !== 18 || snapshot.posts_fingerprint !== closureBaseline.allMd5
++    || !target || hash(target.row_json, 'md5') !== closureBaseline.targetMd5) throw new Error('CLOSURE_BASELINE_CHANGED')
++  const r = snapshot.runtime
++  if (r.schema_version !== 2 || r.maintenance !== true || r.frontend_ready !== false || r.deployment_epoch !== closureBaseline.epoch
++    || snapshot.events.length || snapshot.safety.length) throw new Error('CLOSURE_STATE_CHANGED')
++  const names = ['instagram-prepare', 'instagram-publish', 'instagram-status']
++  if (JSON.stringify(snapshot.readiness.map(x => x.function_name).sort()) !== JSON.stringify(names)
++    || snapshot.readiness.some(x => x.schema_version !== 2 || x.deployment_epoch !== closureBaseline.epoch)) throw new Error('CLOSURE_READINESS_CHANGED')
++  return snapshot
++}
++
++export async function savePrivateClosureBackup(snapshot) {
++  checkBackupIntegrity(snapshot)
++  // Only OS Temp; no caller-selected repository destination.
++  const root = await realpath(tmpdir()), repository = await realpath(process.cwd())
++  if (within(repository, root)) throw new Error('CLOSURE_PRIVATE_PATH_REQUIRED')
++  const directory = await mkdtemp(join(root, 'prart-closure-private-'))
++  if (process.platform === 'win32') {
++    const user = execFileSync('whoami', [], { encoding: 'utf8', windowsHide: true }).trim()
++    execFileSync('icacls', [directory, '/inheritance:r', '/grant:r', `${user}:(OI)(CI)F`], { stdio: 'pipe', windowsHide: true })
++  } else await chmod(directory, 0o700)
++  const bytes = Buffer.from(JSON.stringify(snapshot, null, 2), 'utf8')
++  const digest = hash(bytes)
++  await writeFile(join(directory, 'snapshot.json'), bytes, { flag: 'wx', mode: 0o600 })
++  await writeFile(join(directory, 'manifest.json'), JSON.stringify({ project_ref: closureBaseline.project, snapshot_sha256: digest, post_count: snapshot.posts.length, posts_fingerprint: snapshot.posts_fingerprint }), { flag: 'wx', mode: 0o600 })
++  await verifyPrivateClosureBackup(directory)
++  return { directory, snapshot_sha256: digest, post_count: snapshot.posts.length }
++}
++
++export async function verifyPrivateClosureBackup(directory) {
++  const actual = await realpath(directory), root = await realpath(tmpdir()), repository = await realpath(process.cwd())
++  if (!within(root, actual) || within(repository, actual) || !actual.split(sep).at(-1).startsWith('prart-closure-private-')) throw new Error('CLOSURE_PRIVATE_PATH_REQUIRED')
++  const bytes = await readFile(join(actual, 'snapshot.json'))
++  const manifest = JSON.parse(await readFile(join(actual, 'manifest.json'), 'utf8'))
++  if (manifest.project_ref !== closureBaseline.project || manifest.snapshot_sha256 !== hash(bytes)) throw new Error('CLOSURE_BACKUP_CHECKSUM_FAILED')
++  const snapshot = checkBackupIntegrity(JSON.parse(bytes.toString('utf8')))
++  if (manifest.post_count !== snapshot.posts.length || manifest.posts_fingerprint !== snapshot.posts_fingerprint) throw new Error('CLOSURE_BACKUP_CHECKSUM_FAILED')
++  return { directory: actual, snapshot, digest: hash(bytes) }
++}
++
++export async function verifyClosureAdministrator(input, fetchImpl = fetch) {
++  const { key, token } = validateMaintenanceCredentials(input?.key, input?.token)
++  const base = `https://${closureBaseline.project}.supabase.co`
++  async function get(path) {
++    let response
++    try { response = await fetchImpl(base + path, { method: 'GET', headers: { apikey: key, Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(10000) }) }
++    catch { throw new Error('CLOSURE_ADMIN_CONNECTION_FAILED') }
++    if (!response.ok) throw new Error('CLOSURE_ADMIN_AUTH_FAILED')
++    try { return await response.json() } catch { throw new Error('CLOSURE_ADMIN_AUTH_FAILED') }
++  }
++  const user = await get('/auth/v1/user')
++  if (!uuid(user?.id) || user.is_anonymous || user.role !== 'authenticated') throw new Error('CLOSURE_ADMIN_AUTH_FAILED')
++  const members = await get('/rest/v1/admin_users?select=user_id&user_id=eq.' + user.id)
++  if (!Array.isArray(members) || !members.some(m => m.user_id === user.id)) throw new Error('CLOSURE_ADMIN_REQUIRED')
++  return user.id
++}
++
++export async function prepareClosureSql({ backupDirectory, credentials }, fetchImpl = fetch) {
++  // A backup is a prerequisite, not evidence that a caller-supplied actor is authentic.
++  const backup = await verifyPrivateClosureBackup(backupDirectory)
++  validateClosureSnapshot(backup.snapshot)
++  if (Math.abs(Date.now() - Date.parse(backup.snapshot.observed_at)) > 300000) throw new Error('CLOSURE_BACKUP_STALE')
++  const actor = await verifyClosureAdministrator(credentials, fetchImpl)
++  const claims = JSON.parse(Buffer.from(credentials.token.trim().split('.')[1], 'base64url').toString('utf8'))
++  const validUntil = new Date(Math.min(claims.exp * 1000, Date.now() + 120000)).toISOString()
++  const template = await readFile(new URL('./archive-instagram-historical-attempt.sql', import.meta.url), 'utf8')
++  const sql = template.replaceAll('__VERIFIED_ACTOR_UUID__', actor).replaceAll('__AUTH_VALID_UNTIL__', validUntil).replaceAll('__BACKUP_SHA256__', backup.digest)
++    .replaceAll('__EXPECTED_TARGET_MD5__', closureBaseline.targetMd5).replaceAll('__EXPECTED_ALL_POSTS_MD5__', closureBaseline.allMd5)
++  if (/__[A-Z_]+__/.test(sql)) throw new Error('CLOSURE_TEMPLATE_INVALID')
++  await writeFile(join(backup.directory, 'approved-for-review.sql'), sql, { flag: 'wx', mode: 0o600 })
++  await writeFile(join(backup.directory, 'preparation.json'), JSON.stringify({ actor_id: actor, auth_valid_until: validUntil, snapshot_sha256: backup.digest, sql_sha256: hash(sql) }), { flag: 'wx', mode: 0o600 })
++  return { directory: backup.directory, sql_sha256: hash(sql), actor_id: actor, remote_sql_executed: false, drain_verified: false }
++}
++
++export function classifyClosureOutcome(before, after, actor, backupSha) {
++  checkBackupIntegrity(before); checkBackupIntegrity(after)
++  const same = isDeepStrictEqual
++  if (before.posts.length !== after.posts.length || !same(before.runtime, after.runtime)
++    || !same(before.readiness, after.readiness) || !same(before.migrations, after.migrations)
++    || !same(before.safety, after.safety)) return 'inconsistent_stop'
++  if (same(before.posts, after.posts) && same(before.events, after.events)) return 'not_applied'
++  const original = before.posts.find(p => p.id === closureBaseline.post)
++  const current = after.posts.find(p => p.id === closureBaseline.post)
++  if (!original || !current || !same(before.posts.filter(p => p.id !== closureBaseline.post), after.posts.filter(p => p.id !== closureBaseline.post))) return 'inconsistent_stop'
++  const a = JSON.parse(original.row_json), b = JSON.parse(current.row_json)
++  if (a.status !== 'publishing' || b.status !== 'publish_failed' || b.error_code !== 'ADMIN_ARCHIVED_BEFORE_PUBLISH'
++    || !(Date.parse(b.updated_at) > Date.parse(a.updated_at)) || before.events.length !== 0 || after.events.length !== 1) return 'inconsistent_stop'
++  for (const key of ['status', 'error_code', 'updated_at']) { delete a[key]; delete b[key] }
++  if (!same(a, b)) return 'inconsistent_stop'
++  const event = after.events[0]
++  if (event.actor_id !== actor || event.post_id !== closureBaseline.post || event.attempt_id !== closureBaseline.attempt
++    || event.account_id !== '17841465479111585' || event.revision !== 1
++    || event.operation !== 'admin_archive_before_publish' || event.digest !== a.publish_progress.digest
++    || event.status_before !== 'publishing' || event.status_after !== 'publish_failed'
++    || event.phase_before !== 'waiting' || event.phase_after !== 'waiting'
++    || event.error_code !== 'ADMIN_ARCHIVED_BEFORE_PUBLISH' || event.trace_id !== 'backup-sha256:' + backupSha
++    || !event.finished_at || ['method', 'endpoint', 'remote_id', 'http_status', 'meta_code', 'meta_subcode', 'container_status', 'resolution'].some(k => event[k] !== null)) return 'inconsistent_stop'
++  return 'closed_verified'
++}
++
++if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
++  let input, bytes
++  try {
++    if (process.argv.length !== 3 || !['--backup', '--prepare', '--verify'].includes(process.argv[2])) throw new Error('CLOSURE_MODE_REQUIRED')
++    const chunks = []; let size = 0
++    for await (const chunk of process.stdin) { size += chunk.length; if (size > 16777216) throw new Error('CLOSURE_INPUT_TOO_LARGE'); chunks.push(chunk) }
++    bytes = Buffer.concat(chunks); input = JSON.parse(bytes.toString('utf8'))
++    let result
++    if (process.argv[2] === '--verify') {
++      const backup = await verifyPrivateClosureBackup(input.backupDirectory)
++      validateClosureSnapshot(backup.snapshot)
++      const preparation = JSON.parse(await readFile(join(backup.directory, 'preparation.json'), 'utf8'))
++      if (!uuid(preparation.actor_id) || preparation.snapshot_sha256 !== backup.digest) throw new Error('CLOSURE_PREPARATION_INVALID')
++      result = { outcome: classifyClosureOutcome(backup.snapshot, input.snapshot, preparation.actor_id, backup.digest), drain_verified: false, remote_sql_executed: false }
++      if (result.outcome === 'inconsistent_stop') process.exitCode = 1
++    } else result = process.argv[2] === '--backup' ? await savePrivateClosureBackup(input) : await prepareClosureSql(input)
++    console.log(JSON.stringify(result, null, 2))
++  } catch (error) {
++    console.log(JSON.stringify({ prepared: false, code: /^CLOSURE_[A-Z_]+$/.test(error.message || '') ? error.message : 'CLOSURE_PREPARATION_FAILED' }))
++    process.exitCode = 1
++  } finally {
++    bytes?.fill(0)
++    if (input?.credentials) { input.credentials.token = ''; input.credentials.key = '' }
++    input = undefined
++  }
++}
+diff --git a/tests/instagram-historical-closure.test.js b/tests/instagram-historical-closure.test.js
+new file mode 100644
+index 00000000..a1c6647b
+--- /dev/null
++++ b/tests/instagram-historical-closure.test.js
+@@ -0,0 +1,192 @@
++import assert from 'node:assert/strict'
++import { createHash } from 'node:crypto'
++import { readFile, writeFile } from 'node:fs/promises'
++import { join } from 'node:path'
++import { test } from 'node:test'
++import { instagramDb, adminId, userId, postIds, sqlRpc } from './helpers/instagram-db.js'
++import { advancePublication } from '../supabase/functions/instagram-publish/engine.ts'
++import { createPublishHandler } from '../supabase/functions/instagram-publish/handler.ts'
++import { createPrepareHandler } from '../supabase/functions/instagram-prepare/handler.ts'
++import { closureBaseline as baseline, checkBackupIntegrity, validateClosureSnapshot, savePrivateClosureBackup,
++  verifyPrivateClosureBackup, verifyClosureAdministrator, classifyClosureOutcome } from '../scripts/historical-closure.mjs'
++
++const template = await readFile(new URL('../scripts/archive-instagram-historical-attempt.sql', import.meta.url), 'utf8')
++const snapshotSql = await readFile(new URL('../scripts/instagram-closure-backup.sql', import.meta.url), 'utf8')
++const digest = '76a89e0aef8a69018c916d29d50e0f951cf8d421cd3d19e46f8c80587cdc3b79'
++const backupSha = 'a'.repeat(64)
++const versions = ['20261026214609','20261026215348','20261028120000','20261028130000','20261028140000','20261030120000','20261104120000','20261105010000','20261107010000','20261107020000']
++const hash = value => createHash('md5').update(value).digest('hex')
++async function fixture() {
++  const db = await instagramDb()
++  await db.exec('CREATE SCHEMA supabase_migrations; CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY, name text, statements text[])')
++  for (const version of versions) await db.query('INSERT INTO supabase_migrations.schema_migrations VALUES ($1,$2,ARRAY[$3])', [version, 'fixture', 'fixture SQL'])
++  await db.query(`UPDATE instagram_posts SET id=$1,publish_attempt_id=$2,mode='carousel',
++    image_ids=ARRAY[$1::uuid,$3::uuid],images='[{"id":"a"},{"id":"b"}]',prepared_images='[{"image_id":"a"},{"image_id":"b"}]',
++    publish_started_at='2026-11-07T06:26:32.284Z',container_id='17931282783182638',publish_progress=$4::jsonb WHERE id=$5`,
++  [baseline.post, baseline.attempt, postIds[1], JSON.stringify({ phase: 'waiting', waiting_child: false, polls: 0, digest, children: ['17931282594182638','17931282639182638'] }), postIds[0]])
++  for (let i = 0; i < 16; i++) {
++    const id = `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
++    await db.query(`INSERT INTO instagram_posts(id,created_by,mode,product_ids,image_ids,products,images,caption,template)
++      VALUES ($1,$2,'single',ARRAY[$1::uuid],ARRAY[$1::uuid],'[]','[]','Fixture content','')`, [id, adminId])
++  }
++  await db.query('UPDATE instagram_runtime_control SET deployment_epoch=$1', [baseline.epoch])
++  for (const name of ['instagram-status','instagram-prepare','instagram-publish']) await db.query('SELECT register_instagram_backend($1,2)', [name])
++  // Fixture only: restore the exact historical timestamp without a real clock/HTTP.
++  await db.exec('ALTER TABLE instagram_posts DISABLE TRIGGER instagram_posts_updated')
++  await db.query("UPDATE instagram_posts SET updated_at='2026-11-07T06:28:09.495369Z' WHERE id=$1", [baseline.post])
++  await db.exec('ALTER TABLE instagram_posts ENABLE TRIGGER instagram_posts_updated')
++  return db
++}
++async function snapshot(db) {
++  // Execute the real backup SELECT in this disposable PostgreSQL, with a real
++  // transaction READ ONLY. No remote endpoint or credential is used.
++  const select = snapshotSql.slice(snapshotSql.indexOf('SELECT'), snapshotSql.lastIndexOf('ROLLBACK;')).trim()
++  await db.exec('BEGIN READ ONLY; SET LOCAL TIME ZONE \'UTC\'')
++  try { return (await db.query(select)).rows[0].closure_backup } finally { await db.exec('ROLLBACK') }
++}
++function fixtureSql(before, actor = adminId) {
++  // Test-only substitution of synthetic row hashes. Production preparation has
++  // immutable real hashes and rejects this fixture (see test below).
++  return template.replaceAll('__VERIFIED_ACTOR_UUID__', actor).replaceAll('__AUTH_VALID_UNTIL__', new Date(Date.now() + 120000).toISOString()).replaceAll('__BACKUP_SHA256__', backupSha)
++    .replaceAll('__EXPECTED_ALL_POSTS_MD5__', before.posts_fingerprint)
++    .replaceAll('__EXPECTED_TARGET_MD5__', hash(before.posts.find(p => p.id === baseline.post).row_json))
++}
++async function rejectAndRollback(db, sql, expected) {
++  await assert.rejects(db.exec(sql), expected)
++  await db.exec('ROLLBACK')
++}
++
++test('closure SQL and backup preserve history, audit atomically and deny all resume routes', async t => {
++  const db = await fixture()
++  try {
++    const before = await snapshot(db)
++    checkBackupIntegrity(before)
++    assert.throws(() => validateClosureSnapshot(before), /CLOSURE_BASELINE_CHANGED/)
++    assert.equal(classifyClosureOutcome(before, before, adminId, backupSha), 'not_applied')
++    await t.test('real SQL commits precisely the two fields plus trigger timestamp and one attributed event', async () => {
++      await db.exec(fixtureSql(before))
++      const after = await snapshot(db)
++      assert.equal(classifyClosureOutcome(before, after, adminId, backupSha), 'closed_verified')
++      assert.equal(after.posts.length, 18)
++      assert.equal(after.runtime.maintenance, true); assert.equal(after.runtime.frontend_ready, false)
++      assert.equal(after.events.length, 1)
++      assert.equal(after.events[0].method, null); assert.equal(after.events[0].endpoint, null)
++      assert.equal(after.events[0].actor_id, adminId)
++      // A second execution never silently archives again or adds another event.
++      await rejectAndRollback(db, fixtureSql(before), /CLOSURE_LEDGER_CHANGED/)
++      assert.equal(classifyClosureOutcome(after, await snapshot(db), adminId, backupSha), 'not_applied')
++      const corrupted = structuredClone(after); corrupted.events[0].actor_id = userId
++      assert.equal(classifyClosureOutcome(before, corrupted, adminId, backupSha), 'inconsistent_stop')
++    })
++    await t.test('current engine and HTTP handlers reject terminal start/continue/reconcile/cancel/reset/delete without Meta', async () => {
++      const saved = { fetch: globalThis.fetch, Deno: globalThis.Deno }
++      const row = JSON.parse((await snapshot(db)).posts.find(p => p.id === baseline.post).row_json)
++      const rpc = sqlRpc(db); let metaCalls = 0, postPatches = 0
++      globalThis.Deno = { env: { get: k => ({ SUPABASE_URL: 'https://test.invalid', SUPABASE_SERVICE_ROLE_KEY: 'fake-service', SUPABASE_ANON_KEY: 'fake-anon' })[k] } }
++      globalThis.fetch = async (input, options = {}) => {
++        const url = new URL(input)
++        if (url.origin !== 'https://test.invalid') { metaCalls++; throw new Error('Unexpected network') }
++        if (url.pathname === '/auth/v1/user') return Response.json({ id: adminId, is_anonymous: false })
++        if (url.pathname === '/rest/v1/admin_users') return Response.json([{ user_id: adminId }])
++        if (url.pathname === '/rest/v1/rpc/instagram_runtime_status') return Response.json({ schema_version: 2, maintenance: false, frontend_ready: true })
++        if (url.pathname === '/rest/v1/rpc/ack_instagram_write') return rpc(url, options)
++        if (url.pathname === '/rest/v1/instagram_posts' && (!options.method || options.method === 'GET')) return Response.json([row])
++        if (url.pathname === '/rest/v1/instagram_events') return Response.json([])
++        postPatches++; throw new Error('Unexpected post mutation')
++      }
++      try {
++        for (const action of ['start','continue','reconcile','cancel']) {
++          await assert.rejects(advancePublication(row, action, digest, adminId), /CONFIRMATION_REQUIRED|DRAFT_CONFLICT|MANUAL_REVIEW_REQUIRED/)
++          const response = await createPublishHandler({ account_id: row.instagram_account_id })(new Request(`https://function.invalid/?action=${action}&id=${row.id}&revision=1`, { method: 'POST', headers: { Authorization: 'Bearer fake' }, body: JSON.stringify({ digest }) }))
++          assert.equal(response.status, 409)
++        }
++        for (const action of ['reset','delete']) {
++          const response = await createPrepareHandler()(new Request(`https://function.invalid/?action=${action}&id=${row.id}&revision=1`, { method: 'POST', headers: { Authorization: 'Bearer fake' } }))
++          assert.equal(response.status, 409)
++        }
++        assert.equal(metaCalls, 0); assert.equal(postPatches, 0)
++      } finally { globalThis.fetch = saved.fetch; globalThis.Deno = saved.Deno }
++    })
++  } finally { await db.close() }
++})
++
++test('closure fails closed on changed baseline, exact checkpoint, permissions and audit errors', async t => {
++  for (const [name, mutation, refreshHashes, expected] of [
++    ['other post changed', "UPDATE instagram_posts SET caption='Changed' WHERE id='22222222-2222-4222-8222-222222222222'", false, /CLOSURE_POSTS_CHANGED/],
++    ['wrong attempt', `UPDATE instagram_posts SET publish_attempt_id='99999999-9999-4999-8999-999999999999' WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['wrong revision', `UPDATE instagram_posts SET revision=2 WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['wrong status', `UPDATE instagram_posts SET status='publish_unknown' WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['wrong account', `UPDATE instagram_posts SET instagram_account_id='123' WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['wrong phase', `UPDATE instagram_posts SET publish_progress=jsonb_set(publish_progress,'{phase}','"ready"') WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['changed child', `UPDATE instagram_posts SET publish_progress=jsonb_set(publish_progress,'{children}','["1","2"]') WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['changed principal', `UPDATE instagram_posts SET container_id='123' WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['nonzero polls', `UPDATE instagram_posts SET publish_progress=jsonb_set(publish_progress,'{polls}','1') WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['publication ID appeared', `UPDATE instagram_posts SET instagram_id='123' WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['unexpected progress key', `UPDATE instagram_posts SET publish_progress=publish_progress||'{"operation":{"kind":"write"}}' WHERE id='${baseline.post}'`, true, /CLOSURE_TARGET_CHANGED/],
++    ['maintenance off', 'UPDATE instagram_runtime_control SET maintenance=false', false, /CLOSURE_RUNTIME_CHANGED/],
++    ['frontend ready', 'UPDATE instagram_runtime_control SET frontend_ready=true', false, /CLOSURE_RUNTIME_CHANGED/],
++    ['safety latch appeared', "INSERT INTO instagram_account_safety(account_id,audit_hold) VALUES ('17841465479111585',true)", false, /CLOSURE_LEDGER_CHANGED/],
++    ['readiness missing', "DELETE FROM instagram_backend_readiness WHERE function_name='instagram-status'", false, /CLOSURE_READINESS_CHANGED/],
++    ['migration changed', "INSERT INTO supabase_migrations.schema_migrations(version) VALUES ('99999999999999')", false, /CLOSURE_HISTORY_CHANGED/],
++    ['audit insert fails', "CREATE FUNCTION reject_closure_audit() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'SIMULATED_AUDIT_FAILURE'; END$$; CREATE TRIGGER fail_closure_audit BEFORE INSERT ON instagram_events FOR EACH ROW EXECUTE FUNCTION reject_closure_audit()", false, /SIMULATED_AUDIT_FAILURE/],
++    ['trigger changes protected field', "CREATE FUNCTION damage_closure_post() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN NEW.caption := 'Changed by trigger'; RETURN NEW; END$$; CREATE TRIGGER damage_closure BEFORE UPDATE ON instagram_posts FOR EACH ROW EXECUTE FUNCTION damage_closure_post()", false, /CLOSURE_UNEXPECTED_POST_CHANGE/],
++    ['audit trigger changes post', `CREATE FUNCTION damage_during_audit() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN UPDATE public.instagram_posts SET caption='Changed during audit' WHERE id='${baseline.post}'; RETURN NEW; END$$; CREATE TRIGGER damage_audit AFTER INSERT ON instagram_events FOR EACH ROW EXECUTE FUNCTION damage_during_audit()`, false, /CLOSURE_PRESERVATION_FAILED/],
++  ]) await t.test(name, async () => {
++    const db = await fixture()
++    try {
++      const original = await snapshot(db)
++      await db.exec(mutation)
++      if (refreshHashes) {
++        await db.exec('ALTER TABLE instagram_posts DISABLE TRIGGER instagram_posts_updated')
++        await db.query("UPDATE instagram_posts SET updated_at='2026-11-07T06:28:09.495369Z' WHERE id=$1", [baseline.post])
++        await db.exec('ALTER TABLE instagram_posts ENABLE TRIGGER instagram_posts_updated')
++      }
++      const before = await snapshot(db)
++      await rejectAndRollback(db, fixtureSql(refreshHashes ? before : original), expected)
++      const after = await snapshot(db)
++      assert.deepEqual(after.posts, before.posts); assert.deepEqual(after.events, before.events)
++    } finally { await db.close() }
++  })
++  await t.test('non-admin attribution cannot archive', async () => {
++    const db = await fixture()
++    try { const before = await snapshot(db); await rejectAndRollback(db, fixtureSql(before, userId), /CLOSURE_ADMIN_REQUIRED/); assert.deepEqual((await snapshot(db)).posts, before.posts) } finally { await db.close() }
++  })
++  await t.test('browser authenticated role has no UPDATE/INSERT rights for this operation', async () => {
++    const db = await fixture()
++    try {
++      const rights = (await db.query("SELECT has_table_privilege('authenticated','instagram_posts','UPDATE') AS posts_update, has_table_privilege('authenticated','instagram_events','INSERT') AS audit_insert")).rows[0]
++      assert.deepEqual(rights, { posts_update: false, audit_insert: false })
++      const before = await snapshot(db)
++      await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [adminId])
++      await db.exec('SET ROLE authenticated')
++      // Depending on the row-lock/RLS path, membership can be filtered before
++      // PostgreSQL reaches the table-level write permission error. Both deny.
++      await rejectAndRollback(db, fixtureSql(before), /permission denied|CLOSURE_ADMIN_REQUIRED/)
++      await db.exec('RESET ROLE')
++    } finally { await db.close() }
++  })
++})
++
++test('private backup roundtrip, corruption rejection and fixed Auth-only administrator verification', async () => {
++  const db = await fixture()
++  try {
++    const before = await snapshot(db)
++    const backup = await savePrivateClosureBackup(before)
++    const restored = await verifyPrivateClosureBackup(backup.directory)
++    assert.deepEqual(restored.snapshot, before)
++    await writeFile(join(backup.directory, 'snapshot.json'), 'tampered')
++    await assert.rejects(verifyPrivateClosureBackup(backup.directory), /CLOSURE_BACKUP_CHECKSUM_FAILED/)
++    let calls = 0
++    const token = Buffer.from('{"alg":"HS256"}').toString('base64url') + '.' + Buffer.from(JSON.stringify({ sub: adminId, role: 'authenticated', iss: 'https://blsezjyhiholzwmqewef.supabase.co/auth/v1', exp: Math.floor(Date.now() / 1000) + 300 })).toString('base64url') + '.fake'
++    const credentials = { key: 'sb_publishable_fake_test', token }
++    const actor = await verifyClosureAdministrator(credentials, async (url, options) => {
++      assert.equal(new URL(url).hostname, 'blsezjyhiholzwmqewef.supabase.co')
++      assert.equal(options.method, 'GET'); assert.equal(options.redirect, 'error')
++      assert.equal(options.headers.Authorization, 'Bearer ' + token)
++      calls++; return Response.json(calls === 1 ? { id: adminId, role: 'authenticated', is_anonymous: false } : [{ user_id: adminId }])
++    })
++    assert.equal(actor, adminId); assert.equal(calls, 2)
++    await assert.rejects(verifyClosureAdministrator(credentials, async () => Response.json({ ignored: token }, { status: 401 })), /CLOSURE_ADMIN_AUTH_FAILED/)
++    await assert.rejects(verifyClosureAdministrator(credentials, async url => Response.json(url.includes('/auth/') ? { id: adminId, role: 'authenticated' } : [])), /CLOSURE_ADMIN_REQUIRED/)
++  } finally { await db.close() }
++})
+diff --git a/docs/instagram-historical-closure-procedure.md b/docs/instagram-historical-closure-procedure.md
+new file mode 100644
+index 00000000..caee025a
+--- /dev/null
++++ b/docs/instagram-historical-closure-procedure.md
+@@ -0,0 +1,128 @@
++# Cierre histórico mínimo — SQL y procedimiento para revisión
++
++**Preparación local, sin autorización de ejecución remota.** Proyecto único **blsezjyhiholzwmqewef**. Publicación **f7120683-6f03-43a6-bcf9-18a7ef5d69fe**, intento **9723a05a-982c-43f5-9aac-00491fdcc032**. Esta preparación no consultó ni modificó Cloud, no llamó a Meta y no cambió flags. No hizo commits, pushes, migraciones ni despliegues.
++
++## Artefactos revisables
++
++- `scripts/archive-instagram-historical-attempt.sql`: transacción puntual, no migración ni RPC. Incluye comprobaciones y recibo; la plantilla con placeholders no se ejecuta directamente.
++- `scripts/instagram-closure-backup.sql`: captura completa de las 18 filas, auditoría, seguridad, control, readiness e historial de migraciones mediante una sola consulta de solo lectura.
++- `scripts/historical-closure.mjs`: validación, respaldo local privado, comprobación Auth y preparación del SQL. **No contiene un cliente de escritura SQL remota.** Modos `--backup`, `--prepare` y `--verify`.
++- `tests/instagram-historical-closure.test.js`: PostgreSQL local desechable con las migraciones reales, rutas actuales y HTTP simulado.
++- `docs/instagram-historical-closure.diff`: diff del conjunto nuevo de esta preparación, sin staging ni commits.
++
++La clasificación sigue siendo «abandonado antes de media_publish según el motor y checkpoint conservados». No se representa como una respuesta de Meta ni certificación de ausencia universal de publicación. Los supuestos/limitaciones del informe de evaluación siguen vigentes.
++
++## Cambio exacto
++
++El único UPDATE de negocio afecta al post/intent fijados y asigna:
++
++```sql
++status = 'publish_failed',
++error_code = 'ADMIN_ARCHIVED_BEFORE_PUBLISH'
++```
++
++`updated_at` debe cambiar por el trigger existente. Se exige que absolutamente todas las demás columnas sean iguales antes/después, incluidos intento, fechas previas, contenedores, caption, productos, imágenes y publish_progress. Se comprueba otra vez la fila después de insertar auditoría para detectar también efectos de triggers de eventos.
++
++El evento único es `admin_archive_before_publish`: administrador verificado, post, revisión, cuenta, intento, digest y estados/fases antes/después. No lleva method, endpoint, HTTP, remote_id ni códigos Meta. El campo existente trace_id contiene **`backup-sha256:<hash del snapshot privado>`**, claramente identificado como referencia local al respaldo, no como trace de Meta. No se inventa un evento histórico de escritura.
++
++La transacción exige que sigan existiendo exactamente las 18 filas y su huella original **44eec1f11b52979b908bbe88478b50cd**, y huella individual **eb5ae500290608fddf9b7675b3aae534**. También exige cuenta, revisión 1, timestamps, principal/hijos y el JSON de progreso **exacto**, sin claves adicionales. Compara el historial de diez versiones, maintenance=true, frontend_ready=false, epoch actual y tres readiness válidas. Cualquier evento o fila de seguridad nuevos bloquean la operación; no se borran para hacerla pasar.
++
++Las otras 17 filas, control, seguridad, readiness e historial deben conservarse íntegros. Solo se admite un evento nuevo. No hay manejo de excepciones que permita continuar: error de comprobación, auditoría, trigger, timeout, deadlock o permisos aborta la transacción.
++
++Se emplea READ COMMITTED, bloqueo de membresía del actor, bloqueo inicial del control y bloqueos cortos de tablas de cuenta/posts/eventos/readiness/historial, en ese orden. Las lecturas posteriores a adquirir los locks deben ver cambios que hubieran confirmado mientras se esperaba; no se usa una snapshot anterior a esa espera para aceptar el baseline. No hay HTTP dentro de la transacción. Los bloqueos de tabla son deliberadamente conservadores para esta operación única; podrían esperar o fallar ante otras escrituras. lock_timeout=5s, statement_timeout=15s, idle_in_transaction_session_timeout=30s. Nunca desactivar triggers/RLS o aumentar timeouts para forzar el cierre. Los tests desactivan el trigger solo al construir la fixture con su timestamp histórico; el SQL de producción no lo hace.
++
++## Permisos e identidad
++
++La sesión administrativa del catálogo **no tiene UPDATE directo sobre instagram_posts ni INSERT sobre instagram_events**. Las pruebas lo confirman. Ser administrador en la aplicación no convierte al JWT en una conexión SQL privilegiada.
++
++El futuro transporte SQL necesita el acceso de gestión ya existente con un rol propietario/privilegiado capaz de ejecutar DO, leer/actualizar posts, insertar eventos, leer admin_users y bloquear control/readiness/seguridad/historial. No usar el rol de la API SQL read-only para el cierre ni concederle permisos nuevos. service_role no dispone de acceso directo a control/readiness; no ampliar sus grants para ejecutar este procedimiento.
++
++El actor de auditoría se obtiene separadamente con una **sesión administrativa nueva**, por entrada privada:
++
++1. Validación local de formato/proyecto/vigencia; esto no verifica la firma.
++2. GET fijo a `/auth/v1/user`, donde Supabase verifica la sesión.
++3. GET fijo a `admin_users` usando ese mismo JWT y RLS; el ID devuelto debe ser miembro.
++4. Solo entonces se incorpora ese ID al SQL. Nunca aceptar un actor proporcionado en argumentos, un UUID elegido por el operador, una clave pública, service role o un token de gestión como identidad del administrador.
++
++Ambos GET tienen como único destino `blsezjyhiholzwmqewef.supabase.co`, sin redirecciones ni reintentos. No invocan Edge Functions. El SQL vuelve a comprobar membresía admin, y su ventana de autorización termina como máximo 120 segundos después de la comprobación Auth o cuando expire el JWT, lo que ocurra antes. La base no verifica por sí sola una firma JWT: **el preparador y el transporte SQL privilegiado son parte de la frontera de confianza**. No exponer esta plantilla como RPC accesible al navegador. No modificar manualmente placeholders para saltar la verificación.
++
++## Respaldo privado: preparado, todavía no tomado de Cloud
++
++No se afirma haber creado un respaldo real nuevo: hacerlo requiere una lectura de Cloud que no estaba autorizada en este turno. Los inventarios sanitizados anteriores no sustituyen la copia completa. La herramienta se probó con un respaldo completo de **datos ficticios locales**, con verificación de lectura y detección de corrupción.
++
++Después de una autorización que incluya esta captura:
++
++1. Revalidar proyecto vinculado, funciones 6/5/3/JWT, flags/epoch/readiness, cuerpos y permisos esperados. No ejecutar health. Congelar despliegues y acciones durante el corte.
++2. Enviar únicamente el contenido de `instagram-closure-backup.sql` al endpoint **`/v1/projects/blsezjyhiholzwmqewef/database/query/read-only`**, usando la credencial de gestión existente solo en memoria. Extraer `closure_backup` en memoria; no imprimir cuerpos, captions, fotografías o credenciales.
++3. Pasar ese objeto JSON al stdin de `node scripts/historical-closure.mjs --backup`, con transporte UTF-8. La herramienta crea un directorio exclusivo `prart-closure-private-*` bajo Temp, fuera del repositorio. En Windows retira herencia y concede acceso al usuario local actual mediante ACL antes de escribir; en otros sistemas usa permisos 0700/0600. Un fallo de permisos aborta la preparación.
++4. Se guardan `snapshot.json` y `manifest.json`: hashes SHA-256 de bytes completos y MD5 de las filas canónicas PostgreSQL. Se relee el archivo, se verifica el SHA y se recalculan las huellas de las filas. No basta contar filas. Es un snapshot de aplicación, no una copia física/PITR de todo el proyecto ni un respaldo de los bytes de Storage.
++5. Conservar además los respaldos de código ya disponibles. No eliminar originales o derivados de Storage, ni contenedores. El snapshot conserva sus referencias y manifiestos; el cierre no modifica esos objetos.
++
++El respaldo contiene captions y datos completos; nunca añadirlo a Git, adjuntarlo al chat o ponerlo en una carpeta pública. Sus archivos tienen acceso restringido, pero no se promete cifrado independiente del disco ni borrado forense. Conservarlo y probar lectura antes de ejecutar cualquier UPDATE.
++
++## Preparación privada del SQL, después de autorizar los GET Auth
++
++El helper recibe por stdin un objeto de esta forma, **nunca con valores reales en comandos/historial**:
++
++```json
++{"backupDirectory":"<directorio privado>","credentials":{"key":"<clave pública>","token":"<access_token nuevo>"}}
++```
++
++Invocación: `node scripts/historical-closure.mjs --prepare`. La futura entrada debe suministrarse mediante un proceso local con campos ocultos o Read-Host -AsSecureString y un pipe UTF-8 controlado, sin archivo de credenciales, argumentos con valores, logs ni variables persistentes. **No reutilizar las ventanas anteriores de health**, porque ejecutan otra operación. No recuperar tokens previos. La ventana/entrada que se vaya a usar deberá revisarse antes de abrirse.
++
++El helper exige el snapshot íntegro y baseline exactos, antigüedad máxima de cinco minutos y verificación Auth/admin. Solo produce `approved-for-review.sql` y `preparation.json` dentro del respaldo privado; guarda actor, expiración y hashes, nunca el JWT. Termina limpiando referencias/buffer principal; no promete borrar todas las copias de cadenas de .NET/V8. Las credenciales no se envían al endpoint de gestión.
++
++La salida sanitizada indica ruta, actor y SHA del SQL, no los datos completos. La existencia del archivo **no ejecuta ni autoriza el cierre**. Si caduca la ventana Auth antes de su ejecución, detenerse y preparar una nueva autorización autenticada; no editar la fecha a mano ni sobrescribir evidencia. Los archivos se crean con exclusión (`wx`).
++
++## Ejecución futura: una única solicitud, todavía no autorizada
++
++Solicitar aprobación explícita del SQL puntual, sus hashes, motivo/limitaciones y actor. Antes de enviar: revalidar que la ventana Auth sigue vigente, verificar nuevamente el SHA del archivo contra preparation.json, la copia privada y los metadatos remotos. No hay una opción `--execute` en la herramienta preparada.
++
++El futuro ejecutor enviará **una sola vez** el SQL revisado completo, sin partirlo, al endpoint de gestión de escritura **`/v1/projects/blsezjyhiholzwmqewef/database/query`**, proyecto fijo, con BEGIN/COMMIT en una única sesión. Este endpoint es distinto del read-only; cambiarlo solo está permitido con esa autorización posterior. El token de gestión permanece en memoria del proceso y no forma parte del SQL.
++
++No usar db push, migraciones, repair de historial, funciones operativas, cancel/reconcile ni escrituras independientes para la auditoría. No hacer COMMIT manual tras un error. No ejecutar el cierre en varias llamadas sin una misma transacción. No reintentar automáticamente un timeout/504 ni asumir que HTTP 201 demuestra por sí solo conservación.
++
++Tras respuesta satisfactoria, registrar solo el recibo permitido y hacer una captura independiente con el SQL de respaldo de lectura. Pasar al stdin de `node scripts/historical-closure.mjs --verify`:
++
++```json
++{"backupDirectory":"<directorio privado original>","snapshot":"<objeto closure_backup posterior, no una cadena>"}
++```
++
++El campo snapshot debe ser el **objeto** recibido por la consulta, no el texto ilustrativo del ejemplo. El verificador vuelve a leer el respaldo, obtiene el actor de preparation.json y compara las 18 filas, todos los campos conservados y el evento exacto. El snapshot posterior y el recibo deben guardarse en el mismo directorio privado para completar la evidencia de después; no sobrescribir snapshot.json original. Se documentará la nueva huella esperada, sin cambiar la antigua en pruebas/evidencia retrospectiva.
++
++## Timeout, resultado incierto o fallo
++
++Ante cualquier fallo, conservar mantenimiento y detener nuevas escrituras. Un recibo anterior a COMMIT, un 504 o un cliente desconectado no prueban si hubo confirmación. La verificación independiente clasifica:
++
++| Resultado | Condición | Acción |
++| --- | --- | --- |
++| `not_applied` | Todas las filas, eventos, control, readiness, seguridad e historial siguen iguales al backup | No reintentar automáticamente. Registrar el fallo y pedir autorización para otro intento autenticado. |
++| `closed_verified` | Únicamente status/error_code/updated_at cambiaron en la fila prevista y existe el único evento exacto con actor/referencia del backup; el resto está intacto | No repetir SQL. Conservar backup/recibo y emitir informe de cierre; flags sin cambios. |
++| `inconsistent_stop` | Cambios adicionales, auditoría ausente/incorrecta, otro actor, estado divergente, etc. | Mantener suspensión e investigar por lectura. No completar a mano, borrar eventos, restaurar todo el snapshot ni volver a publishing. |
++| Lectura no disponible | No es posible clasificar de manera fiable | Resultado desconocido; mantener suspensión y pedir intervención/autorización adicional. |
++
++**No se prepara una reversión automática a publishing/waiting**: reabriría un trabajo que se decidió abandonar. El backup permite investigación o una reparación específica revisada; no autoriza sobrescribir publicaciones/eventos ni eliminar la evidencia del cierre. Ningún fallo habilita Meta o exige cambiar flags como recuperación.
++
++## Pruebas locales y límites
++
++Se ejecutó PostgreSQL embebido **PGlite**, con las migraciones reales; no es un parser SQL simulado ni una conexión a Cloud. Las filas son sintéticas y los hashes de esas fixtures se sustituyen únicamente dentro del test. El preparador de producción no admite overrides: exige las dos huellas reales fijadas y rechaza la fixture.
++
++Pasaron **26 pruebas/subpruebas específicas** y la **suite completa de 149 pruebas/subpruebas**, además de `npm run lint` sin advertencias. Cobertura:
++
++- Commit exacto, evento atribuible y preservación de las otras 17 filas/progreso/IDs/flags/readiness/historial.
++- Rechazo de cambios de huella, intento, revisión, cuenta, estado, fase, hijos, principal, polls, ID remoto o claves de progreso adicionales.
++- Rechazo de mantenimiento retirado, frontend_ready activo, nuevas filas de seguridad, readiness faltante o historial distinto.
++- Fallo de auditoría y triggers que alteran campos protegidos durante UPDATE o auditoría: rollback completo.
++- Reejecución rechazada sin duplicar evento; no admin rechazado; rol authenticated sin permisos directos de escritura.
++- Rutas HTTP y motor actuales: start/continue/reconcile/cancel/reset/delete rechazan el terminal aun simulando mantenimiento retirado; cero Meta y cero PATCH del post.
++- Respaldo completo ficticio, ACL privada, lectura de vuelta y rechazo de corrupción; verificación Auth/admin exclusivamente GET al proyecto fijo con HTTP simulado; clasificación de resultado intacto/cerrado/inconsistente.
++
++La primera ejecución de las pruebas detectó problemas de fixture (search_path del trigger de prueba, membresía RLS del usuario simulado y JWT ficticio sin sub); se corrigieron las fixtures. Tras añadir el bloqueo de membresía, el rol del navegador fue rechazado por RLS antes de llegar al error de escritura; la prueba admite ambas denegaciones y verifica además los privilegios efectivos. No se cambiaron los guards de las funciones desplegadas ni se concedieron permisos.
++
++Las pruebas no certifican permisos o estado actuales de Cloud, ni el comportamiento del transporte remoto de escritura. PGlite tampoco reproduce conexiones independientes para certificar todos los intercalados de locks entre sesiones; se emplean los bloqueos explícitos de PostgreSQL y timeouts conservadores, que deben revisarse en el preflight de ejecución. Esos controles deben revalidarse cuando se autorice la ejecución. El respaldo real y la sesión Auth real **siguen pendientes**. No se publicaron herramientas ni se modificó el frontend.
++
++## Alcance terminado
++
++Solo preparación local completada. El intento histórico no ha cambiado y no se ejecutó SQL remoto. **maintenance=true, frontend_ready=false y drain_verified=false** se conservan conforme al último baseline documentado; no se hicieron nuevas lecturas de Cloud en este turno.
++
++La siguiente decisión es aprobar, si se desea, la captura privada, los GET de autenticación y la ejecución puntual revisada. Esa aprobación no debe incluir activación de Instagram: incluso tras verificar el archivo, el mantenimiento permanece y cualquier cambio de flags requiere otra autorización.
