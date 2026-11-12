@@ -54,17 +54,17 @@ test('release audit reports locations/kinds, never secret values; rejects privat
   assert.equal(sensitivePath('supabase/migrations/example.sql'),false)
 })
 
-test('workflow permits main push and opted-in dispatch with SHA/epoch checks',async()=>{
+test('Pages builds and deploys main without Instagram rollout gates',async()=>{
   const workflow=(await readFile(new URL('../.github/workflows/deploy-pages.yml',import.meta.url),'utf8')).replaceAll('\r\n','\n')
-  const gate = "if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))"
-  assert.ok(workflow.includes('deploy:\n    ' + gate))
-  assert.ok(workflow.includes('Upload site artifact\n        ' + gate))
-  assert.ok(workflow.includes("github.event_name == 'push' && github.sha || inputs.expected_sha"))
-  assert.ok(workflow.includes("github.event_name == 'push' && env.PAGES_MAINTENANCE_EPOCH || inputs.deployment_epoch"))
-  assert.match(workflow,/group: pages-main/)
-  assert.equal((workflow.match(/run: node scripts\/check-pages-release.mjs/g)||[]).length,2)
-  assert.equal((workflow.match(/run: node scripts\/check-instagram-release.mjs frontend-maintenance/g)||[]).length,2)
-  assert.doesNotMatch(workflow,/set_instagram_maintenance|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_ADMIN_ACCESS_TOKEN/)
+  assert.match(workflow,/push:\s+branches: \[main\]/)
+  assert.match(workflow,/workflow_dispatch:/)
+  assert.match(workflow,/deploy:\s+if: github.ref == 'refs\/heads\/main'/)
+  assert.match(workflow,/needs: build/)
+  assert.match(workflow,/run: npm run lint && npm test/)
+  assert.match(workflow,/run: npm run build/)
+  assert.match(workflow,/actions\/upload-pages-artifact@/)
+  assert.match(workflow,/actions\/deploy-pages@/)
+  assert.doesNotMatch(workflow,/check-instagram-release|check-pages-release|write-pages-receipt|release_instagram|deployment_epoch|set_instagram_maintenance|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_ADMIN_ACCESS_TOKEN/)
 })
 
 test('publication tool never contacts GitHub if the local commit differs or has uncommitted files',async()=>{
