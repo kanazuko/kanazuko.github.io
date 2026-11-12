@@ -84,7 +84,6 @@ jobs:
           path: ./dist
 
   deploy:
-    if: github.event_name == 'workflow_dispatch' && inputs.release_instagram && github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
