@@ -58,3 +58,5 @@ id_ed25519
 # Local private Supabase backup adapters
 /scripts/backup-instagram-private.ps1
 /scripts/backup-instagram-private.mjs
+/scripts/preflight-instagram-private.ps1
+/scripts/preflight-instagram-private.mjs
