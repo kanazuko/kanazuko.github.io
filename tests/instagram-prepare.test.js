@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createPrepareHandler } from '../supabase/functions/instagram-prepare/handler.ts'
 import { publicImageUrl } from '../supabase/functions/_shared/instagram.ts'
+import { createInstagramLedger } from './helpers/instagram-ledger.js'
 
 test('preparation state machine, permission gates, cleanup and disabled publishing', async (t) => {
   const previous = { fetch: globalThis.fetch, Deno: globalThis.Deno }
@@ -12,6 +13,7 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
   let publishHandler
   globalThis.Deno = { env: { get: (key) => secrets[key] }, serve: (handler) => { publishHandler = handler } }
   const calls = []
+  const ledger = createInstagramLedger()
   const objects = new Map()
   let isAdmin = true
   let granted = true
@@ -31,6 +33,8 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
   const handler = createPrepareHandler((bytes) => { assert.deepEqual(bytes, jpeg); return bytes })
   globalThis.fetch = async (input, options = {}) => {
     const url = new URL(input)
+    const ledgerResponse = await ledger.fetch(url, options)
+    if (ledgerResponse) return ledgerResponse
     calls.push({ url, options })
     if (url.pathname === '/auth/v1/user') return Response.json({ id: 'admin-id', is_anonymous: anonymous })
     if (url.pathname === '/rest/v1/admin_users') return Response.json(isAdmin ? [{ user_id: 'admin-id' }] : [])
@@ -46,7 +50,7 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
       return Response.json(row ? [row] : [])
     }
     if (url.hostname === 'graph.facebook.com') {
-      assert.equal(options.method, undefined) // No Meta writes in this stage.
+      assert.equal(options.method, 'GET') // No Meta writes in this stage.
       assert.equal(options.headers.Authorization, `Bearer ${secrets.INSTAGRAM_ACCESS_TOKEN}`)
       assert.equal(url.searchParams.has('access_token'), false)
       if (url.pathname.endsWith('/assigned_instagram_accounts')) return Response.json({ data: [{ id: '12345', username: 'prartjewelry' }] })
@@ -105,9 +109,9 @@ test('preparation state machine, permission gates, cleanup and disabled publishi
       assert.equal(row.status, 'preparation_failed')
       assert.equal(objects.size, 0)
       assert.equal((await handler(request('reset'))).status, 200)
-      granted = true; quota = 100
+      granted = true; quota = 100; ledger.clearPause()
       assert.equal((await handler(request('begin'))).status, 429)
-      quota = 0
+      quota = 0; ledger.clearPause()
       await handler(request('reset'))
     })
     await t.test('happy path stores manifest before upload, verifies public hash and records preparation only', async () => {

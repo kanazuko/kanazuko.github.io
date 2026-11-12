@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFile } from 'node:fs/promises'
+import { createInstagramLedger } from './helpers/instagram-ledger.js'
 
 test('Instagram status authenticates before accessing Meta and never exposes secrets', async (t) => {
   const originalFetch = globalThis.fetch
   const originalDeno = globalThis.Deno
   let handler
-  const secrets = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_ANON_KEY: 'public-key', INSTAGRAM_ACCESS_TOKEN: 'private-instagram-token' }
+  const secrets = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_ANON_KEY: 'public-key', SUPABASE_SERVICE_ROLE_KEY: 'fake-service', INSTAGRAM_ACCESS_TOKEN: 'private-instagram-token' }
+  const ledger = createInstagramLedger()
   globalThis.Deno = { env: { get: (name) => secrets[name] }, serve: (fn) => { handler = fn } }
   const calls = []
   const user = { id: '11111111-1111-4111-8111-111111111111' }
@@ -24,6 +26,8 @@ test('Instagram status authenticates before accessing Meta and never exposes sec
   try {
     await import('../supabase/functions/instagram-status/index.ts')
     globalThis.fetch = async (url, options) => {
+      const ledgerResponse = await ledger.fetch(new URL(url), options)
+      if (ledgerResponse) return ledgerResponse
       calls.push({ url, options })
       if (url.includes('/auth/v1/user')) return Response.json({ ...user, is_anonymous: anonymous }, { status: authStatus })
       if (url.includes('/rest/v1/admin_users')) return Response.json(admin ? [{ user_id: user.id }] : [], { status: membershipStatus })
@@ -93,6 +97,7 @@ test('Instagram status authenticates before accessing Meta and never exposes sec
     await t.test('provider errors and network exceptions are sanitized', async () => {
       metaStatus = 400
       for (const [code, expected] of [[190, 'INSTAGRAM_TOKEN_INVALID'], [10, 'INSTAGRAM_PERMISSION_DENIED'], [4, 'INSTAGRAM_RATE_LIMIT'], [999, 'INSTAGRAM_REJECTED']]) {
+        ledger.clearPause()
         metaBody = { error: { code, message: secrets.INSTAGRAM_ACCESS_TOKEN, error_user_msg: 'sensitive' } }
         const response = await handler(request())
         const body = await response.json()
@@ -100,9 +105,11 @@ test('Instagram status authenticates before accessing Meta and never exposes sec
         assert.equal(JSON.stringify(body).includes(secrets.INSTAGRAM_ACCESS_TOKEN), false)
       }
       failNetwork = true
+      ledger.clearPause()
       const response = await handler(request())
       assert.equal((await response.json()).error.code, 'CONNECTION_UNAVAILABLE')
       failNetwork = false
+      ledger.clearPause()
       metaStatus = 200
     })
     await t.test('pagination never follows supplied URLs and is bounded', async () => {

@@ -1,0 +1,11 @@
+# Schema-independent bridge. Explicitly target the production project when deploying.
+project_id = "instagram-maintenance-bridge"
+[functions.instagram-status]
+verify_jwt = true
+entrypoint = "./functions/maintenance/index.ts"
+[functions.instagram-prepare]
+verify_jwt = true
+entrypoint = "./functions/maintenance/index.ts"
+[functions.instagram-publish]
+verify_jwt = true
+entrypoint = "./functions/maintenance/index.ts"

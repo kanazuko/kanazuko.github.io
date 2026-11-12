@@ -1,4 +1,4 @@
-import { authenticate, checkPublishingAccess, cors, database, env, json, limitedBytes, publicImageUrl, SafeError, safeFailure, serviceHeaders, uuid } from '../_shared/instagram.ts'
+import { authenticate, checkPublishingAccess, cors, database, env, instagramHealth, instagramMaintenanceProbe, json, limitedBytes, publicImageUrl, requireInstagramRuntime, SafeError, safeFailure, serviceHeaders, uuid } from '../_shared/instagram.ts'
 
 type Image = { id: string; product_id: string; storage_path: string }
 type Prepared = { image_id: string; path: string; sha256?: string; width?: number; height?: number; bytes?: number }
@@ -24,18 +24,22 @@ export function createPrepareHandler(normalizeJpeg: (bytes: Uint8Array) => Uint8
     let locked: Draft | undefined
     let failureState = 'preparation_failed'
     try {
-      await authenticate(request)
+      const actorId = await authenticate(request)
       const url = new URL(request.url)
       const id = url.searchParams.get('id')
       const revision = Number(url.searchParams.get('revision'))
       const action = url.searchParams.get('action')
+      if (action === 'health') return json(await instagramHealth('instagram-prepare'))
+      if (action === 'maintenance-probe') await instagramMaintenanceProbe()
+      await requireInstagramRuntime()
       if (!uuid(id) || !Number.isSafeInteger(revision) || revision < 1 || !['check', 'begin', 'upload', 'finish', 'reset', 'delete'].includes(action || '')) throw new SafeError('INVALID_REQUEST')
       const [draft]: Draft[] = await database(`instagram_posts?id=eq.${id}&select=*`)
       if (!draft && action === 'delete') return json({ deleted: true })
       if (!draft || draft.revision !== revision) throw new SafeError('DRAFT_CONFLICT', 409)
+      const context = { actor_id: actorId, post_id: id, revision, attempt_id: draft.publish_attempt_id }
 
       if (action === 'check') {
-        const access = await checkPublishingAccess()
+        const access = await checkPublishingAccess(context)
         if (draft.instagram_account_id && draft.instagram_account_id !== access.account_id) throw new SafeError('INSTAGRAM_ACCOUNT_CHANGED', 409)
         return json({ access: { ...access, username: 'prartjewelry' } })
       }
@@ -69,7 +73,7 @@ export function createPrepareHandler(normalizeJpeg: (bytes: Uint8Array) => Uint8
         if (!draft.caption.trim() || [...draft.caption].length > 2200 || (draft.caption.match(/#[\p{L}\p{N}_]+/gu) || []).length > 30 || (draft.caption.match(/@[a-zA-Z0-9_.]+/g) || []).length > 20) throw new SafeError('INVALID_CAPTION')
         // Acquire a lock before contacting Meta; a concurrent request cannot prepare twice.
         locked = await patch(draft, { status: 'uploading', error_code: null })
-        const access = await checkPublishingAccess()
+        const access = await checkPublishingAccess(context)
         const plan = draft.images.map((image) => ({ image_id: image.id, path: `${id}/${revision}/${image.id}.jpg` }))
         const result = await patch(locked, { status: 'preparing', prepared_images: plan, instagram_account_id: access.account_id, permission_checked_at: access.checked_at })
         return json({ draft: result })
@@ -113,7 +117,7 @@ export function createPrepareHandler(normalizeJpeg: (bytes: Uint8Array) => Uint8
         const bytes = await limitedBytes(response, maxBytes)
         if (await digest(bytes) !== image.sha256) throw new SafeError('PUBLIC_IMAGE_UNAVAILABLE')
       }
-      const access = await checkPublishingAccess()
+      const access = await checkPublishingAccess(context)
       if (draft.instagram_account_id !== access.account_id) throw new SafeError('INSTAGRAM_ACCOUNT_CHANGED', 409)
       return json({ draft: await patch(locked, { status: 'prepared', permission_checked_at: access.checked_at, instagram_account_id: access.account_id, error_code: null }) })
     } catch (error) {

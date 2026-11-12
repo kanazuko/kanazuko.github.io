@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { chromium } from 'playwright-core'
 import { createServer } from 'vite'
 
@@ -17,6 +20,10 @@ const photos = ['22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333
 const product = { id: productId, name: 'Anillo de prueba', price: 125, description: 'Acero dorado', images: photos, is_featured: false, category: { id: 'rings', name: 'Anillos' } }
 const catalog = [product, { id: 'other', name: 'Collar destacado', price: 200, images: [], is_featured: true, category: { id: 'necklaces', name: 'Collares' } }]
 let draft
+let accountBlocked = true
+let runtime = { schema_version: 2, maintenance: false, frontend_ready: true, deployment_epoch: '3cd91507-439a-4a97-85bc-1dac9d218856' }
+let runtimeUnavailable = false
+const screenshots = await mkdtemp(join(tmpdir(),'prart-instagram-stage4-'))
 const remoteCalls = []
 const errors = []
 const uploads = []
@@ -37,7 +44,17 @@ try {
     if (url.hostname === '127.0.0.1') return route.continue()
     remoteCalls.push(url.pathname)
     if (url.hostname !== 'test.supabase.co') return route.abort()
-    const respond = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    const respond = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+    if (url.pathname === '/rest/v1/rpc/instagram_runtime_status') return runtimeUnavailable ? respond({ message: 'Simulated unavailable runtime' },503) : respond(runtime)
+    if (url.pathname === '/functions/v1/instagram-status') return accountBlocked
+      ? respond({ error: { code: 'INSTAGRAM_PERMISSION_DENIED' } }, 502)
+      : respond({ connected: true, account_id: '17841465479111585', username: 'prartjewelry' })
+    if (url.pathname === '/rest/v1/rpc/resume_instagram_account') {
+      assert.equal(request.headers().authorization, `Bearer ${token}`)
+      assert.deepEqual(request.postDataJSON(), { p_account: '17841465479111585' })
+      accountBlocked = false
+      return respond(null)
+    }
     if (url.pathname === '/rest/v1/admin_users') return respond({ user_id: adminId })
     if (url.pathname === '/rest/v1/products') return respond(catalog)
     if (url.pathname === '/rest/v1/instagram_posts') return respond(draft ? [draft] : [])
@@ -186,6 +203,53 @@ try {
   await page.getByText('Borrador eliminado. Las fotografías originales se conservaron.').waitFor()
   assert.equal(draft, undefined)
   assert.equal(await page.locator('.instagram-history article').count(), 0)
+  await page.getByRole('button', { name: 'Verificar conexión', exact: true }).click()
+  const resume = page.getByRole('button', { name: 'Reactivar consultas después de corregir el acceso' })
+  await resume.waitFor()
+  const resumeCalls = () => remoteCalls.filter(path => path.endsWith('/resume_instagram_account')).length
+  page.once('dialog', dialog => dialog.dismiss())
+  await resume.click(); assert.equal(resumeCalls(), 0)
+  page.once('dialog', dialog => dialog.accept())
+  await resume.click()
+  await page.getByText('Bloqueo retirado.', { exact: false }).waitFor()
+  assert.equal(resumeCalls(), 1)
+  assert.equal(remoteCalls.filter(path => path.endsWith('/instagram-status')).length, 1, 'reactivation must not contact Meta or advance a publication')
+  await page.getByRole('button', { name: 'Verificar conexión', exact: true }).click()
+  await page.getByText('Estado: Conectado', { exact: true }).waitFor()
+  assert.equal(draft, undefined)
+  // Local fixture only: the historical waiting case must remain read-only.
+  draft = { id: savedId, revision: 1, mode: 'single', status: 'publishing', product_ids: [productId], image_ids: [photos[0].id], caption: 'Intento histórico simulado', template: '', products: [product], images: [photos[0]], prepared_images: [], created_at: '2026-11-07T06:26:32Z', updated_at: '2026-11-07T06:28:09Z', publish_attempt_id: '44444444-4444-4444-8444-444444444444', container_id: '123456', publish_progress: {phase: 'waiting', children: ['123454','123455']} }
+  const historical = JSON.stringify(draft)
+  const functionCalls = () => remoteCalls.filter(path=>path.startsWith('/functions/')).length
+  const beforeMaintenance = functionCalls()
+  runtime = {...runtime,maintenance:true,frontend_ready:false}
+  await page.reload()
+  await page.getByText('Instagram está en mantenimiento. No se enviará contenido; el catálogo continúa disponible.', {exact:true}).waitFor()
+  assert.equal(await page.getByRole('button',{name:'Verificar conexión',exact:true}).isDisabled(),true)
+  assert.equal(await page.getByRole('button',{name:'Publicar en Instagram',exact:true}).isDisabled(),true)
+  assert.equal(await page.getByRole('button',{name:'Continuar publicación',exact:true}).isDisabled(),true)
+  assert.equal(await page.getByRole('button',{name:'Preparar imágenes y verificar permisos',exact:true}).isDisabled(),true)
+  const bypass = await page.evaluate(async row=>{
+    const service = await import('/src/services/instagramService.js')
+    const outcomes=[]
+    for(const run of [()=>service.advanceInstagramPublication(row,'continue'),()=>service.checkInstagramPublishingAccess(row),()=>service.getInstagramStatus(),()=>service.resumeInstagramQueries()]){
+      try {await run();outcomes.push('unexpected-success')}catch(error){outcomes.push(error.code)}
+    }
+    return outcomes
+  },draft)
+  assert.deepEqual(bypass,Array(4).fill('INSTAGRAM_MAINTENANCE'))
+  assert.equal(functionCalls(),beforeMaintenance)
+  assert.equal(JSON.stringify(draft),historical)
+  await page.screenshot({path:join(screenshots,'instagram-maintenance-mobile.png'),fullPage:true})
+  await page.setViewportSize({width:1280,height:900})
+  await page.screenshot({path:join(screenshots,'instagram-maintenance-desktop.png'),fullPage:true})
+  runtimeUnavailable=true
+  await page.getByRole('button',{name:'Actualizar disponibilidad'}).click()
+  await page.getByRole('alert').filter({hasText:'Las operaciones permanecen bloqueadas'}).waitFor()
+  assert.equal(await page.getByRole('button',{name:'Continuar publicación',exact:true}).isDisabled(),true)
+  assert.equal(functionCalls(),beforeMaintenance)
+  assert.equal(JSON.stringify(draft),historical)
   assert.deepEqual(errors, [])
-  console.log('Instagram browser checks passed: selection, ordering, save/reload/edit/reload, rendered photos and caption, saved snapshot, WebP → JPEG, preparation, review-gated publishing, cancel without sending, mobile layout. All remote responses simulated.')
+  console.log(`Maintenance and fail-closed checks passed; historical waiting unchanged. Screenshots: ${screenshots}`)
+  console.log('Instagram browser checks passed: selection, ordering, save/reload/edit/reload, rendered photos and caption, saved snapshot, WebP → JPEG, preparation, review-gated publishing, cancel without sending, explicit account reactivation without publication, mobile layout. All remote responses simulated.')
 } finally { await browser.close(); await server.close() }

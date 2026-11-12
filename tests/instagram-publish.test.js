@@ -1,26 +1,36 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { advancePublication, confirmationDigest } from '../supabase/functions/instagram-publish/engine.ts'
+import { advancePublication as advance, confirmationDigest } from '../supabase/functions/instagram-publish/engine.ts'
 import { createPublishHandler } from '../supabase/functions/instagram-publish/handler.ts'
+import { createInstagramLedger } from './helpers/instagram-ledger.js'
+const advancePublication = (post, action, digest) => advance(post, action, digest, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
 
 test('publication engine with simulated Meta only', async t => {
   const saved = { fetch: globalThis.fetch, Deno: globalThis.Deno }
   globalThis.Deno = { env: { get: name => ({ SUPABASE_URL: 'https://test.supabase.co', SUPABASE_ANON_KEY: 'fake-anon', SUPABASE_SERVICE_ROLE_KEY: 'fake-service', INSTAGRAM_ACCESS_TOKEN: 'fake-token' })[name] } }
   const bytes = new Uint8Array([255, 216, 1, 255, 217])
   const sha256 = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex')
-  let row, writes, tick, loseWrite, metadataFailure, containerState, account, corrupt, admin = true
+  const ledger = createInstagramLedger()
+  let row, writes, tick, loseWrite, metadataFailure, containerState, account, corrupt, readFailure, failPublicationSave, failGuard, failAuthorization, admin = true
   function reset(mode = 'single') {
     tick = 0; writes = []; loseWrite = ''; metadataFailure = false; containerState = 'FINISHED'; account = '123'; corrupt = false
+    ledger.reset()
+    ledger.events.length = 0; readFailure = false; failPublicationSave = false; failGuard = false; failAuthorization = false
     row = { id: '11111111-1111-4111-8111-111111111111', revision: 1, status: 'prepared', updated_at: '0', mode, caption: 'Joya', instagram_account_id: '123', publish_progress: {}, images: (mode === 'single' ? ['a'] : ['a', 'b']).map(id => ({ id })) }
     row.prepared_images = row.images.map(({ id }) => ({ image_id: id, path: `${row.id}/1/${id}.jpg`, sha256, width: 1080, height: 1080, bytes: bytes.length }))
   }
   globalThis.fetch = async (input, options = {}) => {
     const url = new URL(input)
+    if (failGuard && url.pathname === '/rest/v1/rpc/begin_instagram_request') return Response.json({}, { status: 503 })
+    if (failAuthorization && url.pathname === '/rest/v1/instagram_events') return Response.json({}, { status: 503 })
+    const ledgerResponse = await ledger.fetch(url, options)
+    if (ledgerResponse) return ledgerResponse
     if (url.pathname === '/auth/v1/user') return Response.json({ id: 'admin', is_anonymous: false })
     if (url.pathname === '/rest/v1/admin_users') return Response.json(admin ? [{ user_id: 'admin' }] : [])
     if (url.pathname === '/rest/v1/instagram_posts') {
       if (!options.method || options.method === 'GET') return Response.json([row])
       assert.equal(options.method, 'PATCH')
+      if (failPublicationSave && JSON.parse(options.body).instagram_id) { failPublicationSave = false; return Response.json({}, { status: 503 }) }
       if (url.searchParams.get('updated_at') !== `eq.${row.updated_at}` || url.searchParams.get('status') !== `eq.${row.status}`) return Response.json([])
       row = { ...row, ...JSON.parse(options.body), updated_at: String(++tick) }
       return Response.json([row])
@@ -41,7 +51,10 @@ test('publication engine with simulated Meta only', async t => {
     }
     if (url.pathname.endsWith('/assigned_instagram_accounts')) return Response.json({ data: [{ id: account, username: 'prartjewelry' }] })
     if (url.pathname.endsWith('/content_publishing_limit')) return Response.json({ data: [{ quota_usage: 0, config: { quota_total: 50 } }] })
-    if (url.searchParams.get('fields') === 'status_code') return Response.json({ status_code: containerState })
+    if (url.searchParams.get('fields') === 'status_code') {
+      if (readFailure) throw new Error('temporary read failure')
+      return Response.json({ status_code: containerState })
+    }
     if (metadataFailure) throw new Error('metadata network failure')
     return Response.json({ id: row.instagram_id, permalink: 'https://www.instagram.com/p/example/' })
   }
@@ -114,6 +127,7 @@ test('publication engine with simulated Meta only', async t => {
       await assert.rejects(next())
       assert.equal(row.status, 'publish_unknown')
       await assert.rejects(next(), /DRAFT_CONFLICT/)
+      ledger.clearPause()
       await advancePublication(row, 'reconcile')
       assert.equal(writes.length, 2); assert.equal(row.status, 'publish_unknown')
       containerState = 'PUBLISHED'; await advancePublication(row, 'reconcile')
@@ -127,7 +141,7 @@ test('publication engine with simulated Meta only', async t => {
     await t.test('metadata failure recovers with GET only', async () => {
       reset(); await start(); await next(); await next(); await next(); metadataFailure = true
       await assert.rejects(next()); assert.equal(row.error_code, 'METADATA_PENDING')
-      metadataFailure = false; await next()
+      metadataFailure = false; ledger.clearPause(); await next()
       assert.equal(row.status, 'published'); assert.equal(writes.length, 2)
     })
     await t.test('a successful publish is published immediately; legacy metadata can reconcile without another send', async () => {
@@ -159,6 +173,80 @@ test('publication engine with simulated Meta only', async t => {
       await assert.rejects(next(), /POLL_TOO_SOON/); assert.equal(writes.length, 1)
       row.publish_progress.last_poll = '2000-01-01T00:00:00Z'; containerState = 'EXPIRED'
       await assert.rejects(next(), /CONTAINER_NOT_READY/); assert.equal(writes.length, 1)
+    })
+    await t.test('failed GET preserves its container and resumes without another creation', async () => {
+      reset(); await start(); await next(); const container = row.container_id
+      readFailure = true; await assert.rejects(next(), /CONNECTION_UNAVAILABLE/)
+      assert.equal(row.status, 'publishing'); assert.equal(row.publish_progress.phase, 'waiting')
+      assert.equal(row.container_id, container); assert.equal(writes.length, 1)
+      await assert.rejects(next(), /POLL_TOO_SOON/)
+      readFailure = false; ledger.clearPause(); row.publish_progress.retry_after = '2000-01-01T00:00:00Z'
+      await next(); assert.equal(row.publish_progress.phase, 'ready'); assert.equal(writes.length, 1)
+    })
+    await t.test('interrupted classified reads can recover; live, legacy and write locks cannot be stolen', async () => {
+      reset(); await start(); await next()
+      row.publish_progress = { ...row.publish_progress, phase: 'working', operation: { kind: 'read', resume_phase: 'waiting', started_at: new Date().toISOString() } }
+      await assert.rejects(next(), /OPERATION_IN_PROGRESS/)
+      row.publish_progress.operation.started_at = '2000-01-01T00:00:00Z'
+      await next(); assert.equal(row.publish_progress.phase, 'waiting'); assert.equal(writes.length, 1)
+      row.publish_progress = { ...row.publish_progress, phase: 'working', operation: { kind: 'write', resume_phase: 'creating', started_at: '2000-01-01T00:00:00Z' } }
+      await assert.rejects(next(), /MANUAL_REVIEW_REQUIRED/)
+      delete row.publish_progress.operation
+      await assert.rejects(next(), /MANUAL_REVIEW_REQUIRED/); assert.equal(writes.length, 1)
+    })
+    await t.test('a failed initial read can be continued or safely cancelled without orphaning an attempt', async () => {
+      reset(); corrupt = true; await assert.rejects(start(), /PUBLIC_IMAGE_UNAVAILABLE/)
+      assert.equal(row.status, 'publishing'); assert.equal(row.publish_progress.phase, 'checking')
+      corrupt = false; row.publish_progress.retry_after = '2000-01-01T00:00:00Z'; await next()
+      assert.equal(row.publish_progress.phase, 'creating'); assert.equal(writes.length, 0)
+      await advancePublication(row, 'cancel'); assert.equal(row.status, 'prepared'); assert.equal(row.publish_attempt_id, null)
+    })
+    await t.test('durable guard failure before fetch never turns an unsent operation into an uncertain write', async () => {
+      reset(); await start(); failGuard = true
+      await assert.rejects(next(), /DATABASE_UNAVAILABLE/)
+      assert.equal(row.status, 'publishing'); assert.equal(row.publish_progress.phase, 'creating'); assert.equal(writes.length, 0)
+    })
+    await t.test('concurrent continuations create exactly one container', async () => {
+      reset(); await start(); const snapshot = structuredClone(row)
+      const results = await Promise.allSettled([advancePublication(snapshot, 'continue'), advancePublication(snapshot, 'continue')])
+      assert.equal(results.filter(result => result.status === 'fulfilled').length, 1); assert.equal(writes.length, 1)
+    })
+    await t.test('successful remote publication followed by database failure is never resent', async () => {
+      reset(); await start(); await next(); await next(); failPublicationSave = true
+      await assert.rejects(next(), /DATABASE_UNAVAILABLE/)
+      assert.equal(row.status, 'publish_unknown'); assert.equal(writes.length, 2)
+      const publishedEvent = ledger.events.find(event => event.p_operation === 'publish_media')
+      assert.equal(publishedEvent.p_remote_id, '1002')
+      await assert.rejects(next(), /DRAFT_CONFLICT/)
+      await advancePublication(row, 'reconcile'); assert.equal(writes.length, 2)
+    })
+    await t.test('authorization and each Meta request retain actor, attempt and safe diagnostics only', async () => {
+      reset(); const digest = await confirmationDigest(row)
+      await start(); await next(); await next(); await next()
+      const authorization = ledger.events.find(event => event.operation === 'publication_authorized')
+      assert.equal(authorization.actor_id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+      assert.equal(authorization.attempt_id, row.publish_attempt_id); assert.equal(authorization.digest, digest)
+      const requests = ledger.events.filter(event => event.p_method)
+      assert.equal(requests.length, 8)
+      assert.ok(requests.every(event => event.p_actor === authorization.actor_id && event.p_attempt === authorization.attempt_id))
+      assert.ok(requests.some(event => event.p_container_status === 'FINISHED'))
+      assert.equal(JSON.stringify(ledger.events).includes('fake-token'), false)
+      const before = structuredClone(row); before.instagram_url = 'https://www.instagram.com/p/existing/'
+      row = structuredClone(before); const count = requests.length
+      await next(); assert.deepEqual(row, before)
+      assert.equal(ledger.events.filter(event => event.p_method).length, count)
+    })
+    await t.test('failed authorization audit sends nothing and retains original author before recovery', async () => {
+      reset(); failAuthorization = true
+      await assert.rejects(start(), /DATABASE_UNAVAILABLE/)
+      assert.equal(ledger.events.length, 0); assert.equal(writes.length, 0)
+      assert.equal(row.publish_progress.authorization.actor_id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+      assert.ok(row.publish_progress.authorization.authorized_at)
+      failAuthorization = false; row.publish_progress.retry_after = '2000-01-01T00:00:00Z'
+      await next()
+      assert.equal(ledger.events[0].operation, 'confirmation_resumed')
+      assert.equal(ledger.events[0].digest, row.publish_progress.digest)
+      assert.equal(row.publish_progress.phase, 'creating'); assert.equal(writes.length, 0)
     })
   } finally { globalThis.fetch = saved.fetch; globalThis.Deno = saved.Deno }
 })

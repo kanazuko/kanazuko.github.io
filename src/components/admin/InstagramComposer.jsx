@@ -5,12 +5,12 @@ import { advanceInstagramPublication, checkInstagramPublishingAccess, deleteInst
 
 const freshDraft = () => ({ id: crypto.randomUUID(), revision: 0, mode: 'single', product_ids: [], image_ids: [], caption: '', template: DEFAULT_INSTAGRAM_TEMPLATE, status: 'draft', prepared_images: [] })
 const canDelete = row => row.revision > 0 && !row.publish_attempt_id && !row.container_id && !row.instagram_id && ['draft', 'preparing', 'prepared', 'preparation_failed', 'cleanup_failed', 'cleaning', 'uploading'].includes(row.status)
-const canCancel = row => row.status === 'publishing' && row.publish_progress?.phase === 'creating' && !row.container_id && !row.instagram_id && Array.isArray(row.publish_progress.children) && row.publish_progress.children.length === 0
-const canContinue = row => row.status === 'publishing' && !row.instagram_id && ['creating', 'waiting', 'ready'].includes(row.publish_progress?.phase)
+const canCancel = row => row.status === 'publishing' && ['creating', 'checking'].includes(row.publish_progress?.phase) && !row.publish_progress?.operation && !row.container_id && !row.instagram_id && Array.isArray(row.publish_progress.children) && row.publish_progress.children.length === 0
+const canContinue = row => row.status === 'publishing' && !row.instagram_id && (['creating', 'waiting', 'ready', 'checking'].includes(row.publish_progress?.phase) || row.publish_progress?.operation?.kind === 'read')
 const displayState = row => row.instagram_id ? 'Publicado' : canCancel(row) ? 'Pendiente de continuar · aún sin envío' : stateNames[row.status] || row.status
 const stateNames = { draft: 'Borrador', preparing: 'Preparación incompleta', uploading: 'Operación en curso', prepared: 'Preparado', preparation_failed: 'Preparación fallida', cleaning: 'Limpiando', cleanup_failed: 'Limpieza pendiente', publishing: 'Publicando', publish_unknown: 'Resultado por conciliar', published: 'Publicado', publish_failed: 'Publicación fallida' }
 
-export default function InstagramComposer() {
+export default function InstagramComposer({ suspended = true }) {
   const [catalog, setCatalog] = useState([])
   const [history, setHistory] = useState([])
   const [publishedProductIds, setPublishedProductIds] = useState(new Set())
@@ -68,6 +68,7 @@ export default function InstagramComposer() {
     change({ image_ids: next }); setPreviewIndex(0)
   }
   async function save() {
+    if (suspended) return
     const validation = validateInstagramDraft(draft, images)
     if (validation) { setError(validation); return }
     setBusy(true); setError(''); setNotice('')
@@ -78,6 +79,7 @@ export default function InstagramComposer() {
     } catch (failure) { setError(failure.message) } finally { setBusy(false) }
   }
   async function prepare() {
+    if (suspended) return
     setBusy(true); setError(''); setNotice('Verificando permisos de publicación…')
     try {
       let current = draft.status === 'draft' ? await prepareInstagramDraft(draft, 'begin') : draft
@@ -100,6 +102,7 @@ export default function InstagramComposer() {
     } finally { setBusy(false) }
   }
   async function reset() {
+    if (suspended) return
     setBusy(true); setError(''); setNotice('')
     try {
       setDraft(await prepareInstagramDraft(draft, 'reset')); setDirty(false)
@@ -108,6 +111,7 @@ export default function InstagramComposer() {
     } catch (failure) { setError(failure.message) } finally { setBusy(false) }
   }
   async function removeDraft(row) {
+    if (suspended) return
     if (!window.confirm('¿Eliminar este borrador y sus copias preparadas? Las fotografías originales de los productos se conservarán. Esta acción no se puede deshacer.')) return
     setBusy(true); setError(''); setNotice('')
     try {
@@ -121,6 +125,7 @@ export default function InstagramComposer() {
     } finally { setBusy(false) }
   }
   async function checkAccess() {
+    if (suspended) return
     setBusy(true); setError(''); setNotice('Verificando acceso de publicación sin modificar el borrador…')
     try {
       const access = await checkInstagramPublishingAccess(draft)
@@ -128,6 +133,7 @@ export default function InstagramComposer() {
     } catch (failure) { setNotice(''); setError(failure.message) } finally { setBusy(false) }
   }
   async function publishStep(action, target = draft) {
+    if (suspended) return
     if (target.id !== draft.id && dirty && (draft.product_ids.length || draft.caption) && !window.confirm('¿Descartar los cambios sin guardar para abrir este registro?')) return
     if (action === 'cancel' && !window.confirm('¿Cancelar este intento antes del envío? Volverá a Preparado y podrás eliminar el borrador.')) return
     if (action === 'start' && (!reviewAccepted || !review?.publishing_enabled || !window.confirm(`¿Publicar este borrador, revisión ${draft.revision}, en @prartjewelry? Esta acción enviará el contenido a Instagram.`))) return
@@ -149,7 +155,7 @@ export default function InstagramComposer() {
   }
 
   return (
-    <div className="instagram-workspace">
+    <fieldset className="instagram-workspace" disabled={suspended} aria-label="Editor de Instagram" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <section className="admin-form-section">
         <div className="admin-form-section__heading"><h2>Preparar publicación</h2><p>Guarda un borrador y prepara sus imágenes antes de publicar.</p></div>
         <p><strong>Estado:</strong> {displayState(draft)}{dirty ? ' · cambios sin guardar' : ''}</p>
@@ -208,14 +214,15 @@ export default function InstagramComposer() {
         {draft.published_at && <p>Publicado: {new Date(draft.published_at).toLocaleString('es-MX')}</p>}
         {/^https:\/\/(www\.)?instagram\.com\//.test(draft.instagram_url || '') && <p><a href={draft.instagram_url} target="_blank" rel="noopener noreferrer">Ver publicación en Instagram</a></p>}
         <button className="admin-button" type="button" disabled={busy || dirty || draft.status !== 'prepared' || review?.id !== draft.id || review?.revision !== draft.revision || !review?.publishing_enabled || !reviewAccepted} onClick={() => publishStep('start')} aria-describedby="instagram-publish-lock">Publicar en Instagram</button>
-        {draft.status === 'publishing' && ['creating', 'waiting', 'ready', 'metadata'].includes(draft.publish_progress?.phase) && <div>
-          <p>Paso: {draft.publish_progress.phase}. Si espera un contenedor, deja transcurrir un minuto entre consultas. El envío requiere que Meta confirme que está listo.</p>
-          <button className="admin-button" type="button" disabled={busy} onClick={() => publishStep('continue')}>Continuar intento confirmado</button>
+        {canContinue(draft) && <div>
+          <p>Paso: {draft.publish_progress.phase}. Espera al menos un minuto entre consultas. Una lectura interrumpida se puede recuperar después de diez minutos; un envío incierto requiere revisión.</p>
+          <button className="admin-button" type="button" disabled={busy} onClick={() => publishStep('continue')}>{draft.publish_progress?.operation?.kind === 'read' ? 'Recuperar lectura interrumpida' : 'Continuar intento confirmado'}</button>
         </div>}
         {draft.status === 'publish_unknown' && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('reconcile')}>Consultar resultado sin reenviar</button>}
         {canCancel(draft) && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('cancel')}>Cancelar intento sin enviar</button>}
         {draft.instagram_id && !draft.instagram_url && <button className="admin-button admin-button--secondary" type="button" disabled={busy} onClick={() => publishStep('reconcile')}>Recuperar enlace sin reenviar</button>}
         <button className="admin-button admin-button--secondary" type="button" disabled={busy || dirty || draft.status !== 'prepared'} onClick={async () => {
+          if (suspended) return
           setBusy(true); setError(''); setReview(null); setReviewAccepted(false)
           try { setReview(await reviewInstagramPublication(draft)) } catch (failure) { setError(failure.message) } finally { setBusy(false) }
         }}>Revisar antes de publicar</button>
@@ -243,6 +250,6 @@ export default function InstagramComposer() {
         </article>)}</div>
         {!loading && !history.length && <p>Aún no hay borradores guardados.</p>}
       </section>
-    </div>
+    </fieldset>
   )
 }

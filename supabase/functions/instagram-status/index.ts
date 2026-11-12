@@ -1,3 +1,5 @@
+import { instagramHealth, instagramMaintenanceProbe, metaRequest, requireInstagramRuntime, SafeError } from '../_shared/instagram.ts'
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -47,6 +49,9 @@ Deno.serve(async (request: Request) => {
     if (!membership.ok) return failure(503, 'AUTHORIZATION_UNAVAILABLE')
     const admins = await membership.json()
     if (!Array.isArray(admins) || !admins.some((admin) => admin?.user_id === user.id)) return failure(403, 'FORBIDDEN')
+    if (new URL(request.url).searchParams.get('action') === 'health') return reply(200, await instagramHealth('instagram-status'))
+    if (new URL(request.url).searchParams.get('action') === 'maintenance-probe') await instagramMaintenanceProbe()
+    await requireInstagramRuntime()
 
     const token = Deno.env.get('INSTAGRAM_ACCESS_TOKEN')
     if (!token?.trim()) return failure(503, 'INSTAGRAM_NOT_CONFIGURED')
@@ -58,17 +63,7 @@ Deno.serve(async (request: Request) => {
       url.searchParams.set('fields', 'id,username')
       url.searchParams.set('limit', '100')
       if (after) url.searchParams.set('after', after)
-      const response = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` }, signal, redirect: 'error',
-      })
-      const result = await response.json()
-      if (!response.ok || result.error) {
-        const code = result.error?.code
-        if (code === 190) return failure(502, 'INSTAGRAM_TOKEN_INVALID')
-        if (code === 10 || code === 200) return failure(502, 'INSTAGRAM_PERMISSION_DENIED')
-        if (response.status === 429 || [4, 17, 32, 613].includes(code)) return failure(503, 'INSTAGRAM_RATE_LIMIT')
-        return failure(502, 'INSTAGRAM_REJECTED')
-      }
+      const result = await metaRequest(`${url.pathname.split('/').slice(2).join('/')}?${url.searchParams}`, { actor_id: user.id }, undefined, signal)
       if (!Array.isArray(result.data)) return failure(502, 'INSTAGRAM_INVALID_RESPONSE')
       const account = result.data.find((item: { username?: string }) => item?.username === expectedUsername)
       if (account) {
@@ -82,7 +77,7 @@ Deno.serve(async (request: Request) => {
       after = cursor
     }
     return failure(502, 'INSTAGRAM_ACCOUNT_NOT_FOUND')
-  } catch {
-    return failure(503, 'CONNECTION_UNAVAILABLE')
+  } catch (error) {
+    return failure(error instanceof SafeError ? error.status : 503, error instanceof SafeError ? error.code : 'CONNECTION_UNAVAILABLE')
   }
 })

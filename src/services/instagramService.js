@@ -2,6 +2,16 @@ import { supabase } from '../lib/supabase'
 import { catalogImageUrl, validatePublicMediaUrl } from '../utils/instagram'
 
 const messages = {
+  INSTAGRAM_SCHEMA_INCOMPATIBLE: 'Instagram no está disponible: falta completar la actualización del servidor y su base de datos.',
+  INSTAGRAM_MAINTENANCE: 'Instagram está en mantenimiento. No se enviará contenido; el catálogo continúa disponible.',
+  INSTAGRAM_ACCOUNT_BUSY: 'Hay una solicitud de Instagram en curso o pendiente de revisar. Espera antes de continuar.',
+  INSTAGRAM_WRITE_UNRESOLVED: 'La cuenta tiene un envío pendiente de conciliación. No se permiten nuevos envíos hasta revisar su resultado.',
+  INSTAGRAM_AUDIT_UNRESOLVED: 'Una consulta perdió su registro de respuesta. Se permiten consultas de diagnóstico; los envíos siguen bloqueados hasta una revisión.',
+  INSTAGRAM_ACCOUNT_PAUSED: 'Las operaciones de esta cuenta están en pausa. Respeta el tiempo indicado por Meta y vuelve a consultar más tarde.',
+  INSTAGRAM_ACCOUNT_RESTRICTED: 'Meta indicó una restricción de cuenta. Las operaciones están detenidas hasta una revisión administrativa.',
+  INSTAGRAM_TEMPORARY_ERROR: 'Meta no está disponible temporalmente. El intento conserva sus contenedores; espera antes de continuar.',
+  META_WRITE_UNCERTAIN: 'No se conoce el resultado del envío a Meta. No se reenviará: consulta el resultado o solicita una revisión sin crear otra publicación.',
+  CONTAINER_NOT_READY: 'El contenedor no está disponible para publicar. Se conservó el intento; revisa su resultado sin reenviar.',
   POLL_TOO_SOON: 'Meta todavía está procesando el contenido. Espera un minuto entre consultas y luego continúa.',
   DRAFT_HAS_PUBLICATION: 'Este registro tiene un intento de publicación. Se conserva para evitar duplicados y poder consultar su resultado.',
   INSTAGRAM_ACCOUNT_CHANGED: 'La cuenta de Instagram ya no coincide con la preparación guardada. Revisa la conexión y vuelve a preparar antes de publicar.',
@@ -40,6 +50,25 @@ const messages = {
 }
 
 export function instagramErrorMessage(code) { return messages[code] || 'No se pudo completar la operación. Revisa la configuración e inténtalo de nuevo.' }
+
+export async function getInstagramRuntime() {
+  const { data, error } = await supabase.rpc('instagram_runtime_status')
+  if (error || data?.schema_version !== 2 || typeof data.maintenance !== 'boolean' || typeof data.frontend_ready !== 'boolean' || !/^[a-f0-9-]{36}$/i.test(data.deployment_epoch || '')) {
+    const failure = new Error(messages.INSTAGRAM_SCHEMA_INCOMPATIBLE)
+    failure.code = 'INSTAGRAM_SCHEMA_INCOMPATIBLE'
+    throw failure
+  }
+  return data
+}
+
+async function requireInstagramOperations() {
+  const runtime = await getInstagramRuntime()
+  if (runtime.maintenance || !runtime.frontend_ready) {
+    const failure = new Error(runtime.maintenance ? messages.INSTAGRAM_MAINTENANCE : 'Instagram está pendiente de activación. Las operaciones siguen bloqueadas.')
+    failure.code = runtime.maintenance ? 'INSTAGRAM_MAINTENANCE' : 'INSTAGRAM_SCHEMA_INCOMPATIBLE'
+    throw failure
+  }
+}
 
 export async function loadInstagramCatalog() {
   const { data, error } = await supabase.from('products').select('id,name,price,description,is_featured,category:categories!products_category_id_fkey(id,name),images:product_images(id,product_id,storage_path,alt_text,sort_order)').order('name')
@@ -86,6 +115,7 @@ export function preparedImageUrl(path) {
 export function sourceImageUrl(image) { return catalogImageUrl(supabase, image) }
 
 async function invokeInstagramPreparation(draft, action, imageId, body) {
+  await requireInstagramOperations()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error(messages.UNAUTHORIZED)
   const query = new URLSearchParams({ id: draft.id, revision: String(draft.revision), action })
@@ -120,6 +150,7 @@ export async function checkInstagramPublishingAccess(draft) {
 }
 
 export async function reviewInstagramPublication(draft) {
+  await requireInstagramOperations()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error(messages.UNAUTHORIZED)
   const query = new URLSearchParams({ action: 'review', id: draft.id, revision: String(draft.revision) })
@@ -131,6 +162,7 @@ export async function reviewInstagramPublication(draft) {
 }
 
 export async function advanceInstagramPublication(draft, action, digest) {
+  await requireInstagramOperations()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error(messages.UNAUTHORIZED)
   const query = new URLSearchParams({ action, id: draft.id, revision: String(draft.revision) })
@@ -146,6 +178,7 @@ export async function advanceInstagramPublication(draft, action, digest) {
 }
 
 export async function getInstagramStatus() {
+  await requireInstagramOperations()
   const { data: { session }, error: sessionError } = await supabase.auth.getSession()
   if (sessionError || !session) throw new Error(messages.UNAUTHORIZED)
   const { data, error } = await supabase.functions.invoke('instagram-status', {
@@ -157,10 +190,20 @@ export async function getInstagramStatus() {
     const fallback = error.context?.status === 401 ? messages.UNAUTHORIZED
       : error.context?.status === 403 ? messages.FORBIDDEN
         : 'No se pudo consultar Instagram. Comprueba que la función esté desplegada y vuelve a intentarlo.'
-    throw new Error(messages[body?.error?.code] || fallback)
+    const failure = new Error(messages[body?.error?.code] || fallback)
+    failure.code = body?.error?.code
+    throw failure
   }
   if (data?.connected !== true || typeof data.account_id !== 'string' || data.username !== 'prartjewelry') {
     throw new Error(messages[data?.error?.code] || messages.INSTAGRAM_INVALID_RESPONSE)
   }
   return { connected: true, account_id: data.account_id, username: data.username }
+}
+
+export async function resumeInstagramQueries() {
+  await requireInstagramOperations()
+  // The RPC checks admin_users using the caller's JWT. It neither contacts Meta nor
+  // changes any publication, and cannot shorten a timed rate-limit pause.
+  const { error } = await supabase.rpc('resume_instagram_account', { p_account: '17841465479111585' })
+  if (error) throw new Error('No se pudo retirar el bloqueo. Verifica tu sesión administrativa y la migración de seguridad.')
 }

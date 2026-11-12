@@ -1,4 +1,61 @@
-# Auditoría funcional y de seguridad de Instagram
+# Auditoría y correcciones de seguridad de Instagram
+
+**Estado comprobado del 11 de noviembre:** las [migraciones de etapa 2](instagram-stage2-result.md) y las [tres funciones de etapa 3](instagram-stage3-result.md) ya están aplicadas y verificadas en Cloud, con mantenimiento activo, frontend_ready=false y drain_verified=false. Los apartados siguientes conservan la auditoría y preparación históricas; sus referencias a despliegues pendientes describen aquel momento. La etapa 4 del frontend se prepara localmente y requiere autorización antes de publicar.
+
+## Protocolo 2: correcciones posteriores a la revisión de despliegue
+
+Se implementaron las cuatro correcciones pendientes en una migración posterior, `20261107020000_instagram_exclusive_requests.sql`, sin cambiar `20261107010000` ni migraciones anteriores. Añade reservas exclusivas por cuenta, bloqueo persistente de escrituras inciertas, recuperación conservadora de lecturas y control de mantenimiento/versiones. Una respuesta 429 cuya finalización SQL falla deja la reserva bloqueada; otro borrador no puede publicar.
+
+Las tres funciones comprueban el contrato 2 antes de operar. Los health autenticados no llaman a Meta y registran readiness por epoch. Pages necesita activación manual y comprobaciones de backend; un push solo compila. Hay un puente temporal de mantenimiento sin dependencias del esquema para cerrar las rutas antiguas antes de migrar.
+
+El [procedimiento completo de actualización y recuperación](instagram-deployment.md) describe scripts, permisos, límites y la verificación remota pendiente. No se aplicaron migraciones ni se desplegó nada. La compatibilidad del esquema remoto sigue sin confirmarse; no se inventan resultados de producción.
+
+Validación local: 88 pruebas, lint, build y prueba de navegador con toda la red externa simulada. Los casos nuevos usan PostgreSQL PGlite y respuestas HTTP simuladas para las nueve situaciones solicitadas. Verifican además la conservación de campos históricos al migrar y después de operaciones/recuperación. Las pruebas no sustituyen una comprobación de concurrencia en un servidor PostgreSQL remoto con conexiones independientes ni la inspección del runtime desplegado.
+
+La actualización anterior se conserva abajo como antecedente del protocolo 1. Sus referencias a una sola migración y al orden inicial de despliegue quedan sustituidas por el procedimiento del protocolo 2.
+
+## Actualización del 7 de noviembre de 2026
+
+Se implementaron localmente las cinco correcciones de prioridad alta del diagnóstico: separar fallos de lectura y escritura, recuperar bloqueos según la operación, conservar el cierre de envíos inciertos, pausar operaciones por cuenta y registrar autorizaciones/eventos. No se atribuye la restricción de Meta a la integración: el código y la verificación de identidad descrita no permiten determinar su causa.
+
+**Estado: cambios locales pendientes de migración y despliegue.** No se publicaron contenidos, no se crearon contenedores reales, no se reintentaron registros pendientes y no se ejecutaron migraciones remotas ni despliegues. Las pruebas usan respuestas simuladas y PostgreSQL PGlite. No se modificó ninguna publicación real ni se añadieron actualizaciones masivas del historial.
+
+### Comportamiento implementado
+
+1. **Lecturas recuperables.** Un fallo temporal al consultar un contenedor o verificar archivos conserva el intento y sus identificadores. Se guarda un tiempo mínimo de espera de 60 segundos antes de continuar, sin bucles ni reintentos automáticos. Un fallo inicial deja `checking`, que puede continuarse o cancelarse cuando no hay una operación activa ni contenedores. Los errores terminales de contenedor siguen requiriendo revisión.
+2. **Operación persistida antes de avanzar.** Cada bloqueo nuevo indica `read` o `write`, fase de retorno y fecha. Un bloqueo de lectura activo no puede tomarse; después de diez minutos, una petición administrativa puede recuperar el checkpoint mediante comparación atómica. Esa petición solo recupera el estado: no llama a Meta ni publica. Las escrituras y los bloqueos antiguos sin clasificación segura nunca se desbloquean por antigüedad.
+3. **Escrituras inciertas cerradas.** Antes de `media_publish` se guarda `publish_unknown/sending`. Si se pierde la respuesta o falla el guardado posterior, no hay una ruta de reenvío automático. La conciliación sigue siendo GET. Si el guard de base de datos rechaza una operación antes de llamar a Meta, se conserva la fase anterior porque se sabe que no hubo envío. Un registro ya publicado con enlace conocido se devuelve intacto y no requiere consultas a Meta.
+4. **Pausas durables por cuenta.** Las tres Edge Functions comparten un gateway y la misma cuenta de seguridad. HTTP 429/códigos de límite, fallos temporales y desconexiones pausan al menos 60 segundos; se respeta un `Retry-After` mayor, tanto numérico como fecha HTTP. La cuota agotada pausa una hora antes de permitir otra comprobación. Token inválido, permisos denegados o restricción reconocida detienen consultas y escrituras hasta una reactivación administrativa explícita. Las solicitudes que ya estaban en vuelo antes de persistir el bloqueo pueden terminar: esto no es una cola que serialice toda la cuenta.
+5. **Autorización y auditoría.** Se registra el administrador autenticado, borrador/revisión, intento, digest de confirmación, acciones y transiciones. Cada solicitud a Meta tiene un evento duradero anterior al envío y una finalización con fechas, método, endpoint sin query, ID remoto, estado del contenedor, HTTP, código/subcódigo y trace ID validado. No se guardan tokens, cuerpos completos, mensajes libres de Meta ni parámetros de publicación. Una solicitud cuyo resultado no pudo registrarse queda identificada como iniciada y sin finalización.
+
+`creating` y `waiting` siguen siendo fases nuestras, almacenadas en `publish_progress`. En carruseles, `waiting → creating` sigue siendo la transición normal del hijo terminado hacia la siguiente foto o el contenedor principal; no se reinicia la lista de hijos. El motor continúa avanzando un paso por acción administrativa y conserva el límite existente de cinco consultas de procesamiento por contenedor, separadas por al menos un minuto tras la primera consulta.
+
+### Base de datos, permisos y conservación del historial
+
+La migración nueva `supabase/migrations/20261107010000_instagram_safety_and_audit.sql` crea `instagram_events`, `instagram_account_safety` y RPCs de seguridad. No cambia filas, IDs, descripciones ni fechas de `instagram_posts`, ni modifica migraciones anteriores. No hace backfill ni inventa autores de publicaciones antiguas.
+
+Ambas tablas tienen RLS y lectura administrativa. Los usuarios del navegador no pueden insertar, modificar ni borrar eventos o cambiar directamente los bloqueos. Los RPCs de reserva/finalización y pausa quedan restringidos a `service_role`; la reserva comprueba nuevamente que el actor sea administrador. No se concede DELETE sobre la auditoría ni siquiera a `service_role`. La auditoría no tiene una clave foránea al borrador que borre sus eventos al eliminarlo.
+
+La reactivación usa `resume_instagram_account` con el JWT del administrador, comprueba `admin_users` y registra quién la autorizó. Se ofrece desde **Verificar conexión** cuando aparece un bloqueo de token/permisos/restricción, con confirmación después de corregir el acceso. Retirar ese bloqueo no acorta una pausa temporal, no verifica automáticamente Meta y no continúa publicaciones. Si el problema persiste, la siguiente consulta vuelve a bloquear la cuenta.
+
+### Aplicación pendiente y operación
+
+El orden de aplicación es: migración nueva, las tres funciones Instagram con el helper compartido y, finalmente, frontend. Debe coordinarse sin usar la integración durante la actualización: una función antigua todavía no participa en el guard nuevo. Sin las tablas/RPCs nuevos, las funciones actualizadas fallan de forma cerrada antes de contactar a Meta. Esta auditoría no ejecutó ninguno de esos pasos remotos.
+
+Para un resultado desconocido, revisar los eventos del intento antes de actuar. Si Meta devolvió un ID pero falló el guardado del post, puede constar en `remote_id`. No crear una copia ni reenviar para resolverlo. Los registros históricos inciertos o bloqueados no se migran automáticamente a un estado publicable. Tampoco se implementó una conciliación automática que transforme `PUBLISHED` en un nuevo ID final.
+
+La matriz de permisos vigente de Unified Login, disponibilidad de Graph v26.0 y caducidad oficial de contenedores siguen pendientes de validación externa. Los intentos de consulta del diagnóstico a documentación oficial devolvieron errores de acceso/429; no se cambió el host, versión ni permisos por suposiciones.
+
+### Validación local
+
+- `node --test`: 69 pruebas correctas, incluidas regresiones de autenticación y PostgreSQL.
+- Casos nuevos: concurrencia en continuación; GET fallido conservando contenedor; bloqueos activos/abandonados; comprobación fallida antes del primer contenedor; fallo del guard antes del envío; publicación simulada exitosa con fallo de persistencia; auditoría de actor/intento/digest; pausas compartidas, HTTP 401/403/429, restricción y Retry-After; indisponibilidad de auditoría; RLS y RPCs; conservación exacta de una publicación histórica al aplicar la migración en PGlite.
+- Lint y build locales correctos.
+- Prueba de navegador correcta con toda la red externa simulada: preparación, revisión, cancelación sin envío y reactivación administrativa sin continuar publicaciones. No se probó contra Meta real.
+
+## Informe histórico del 4–5 de noviembre de 2026
+
+El contenido siguiente se conserva como antecedente de aquella revisión. Sus afirmaciones sobre publicación deshabilitada, ausencia del motor de envío, estado Cloud y pruebas anteriores corresponden a esa fecha; **no describen el código actual ni verifican el despliegue vigente**.
 
 Fecha: 4 de noviembre de 2026, America/Mexico_City. Descargas verificadas el 5 de noviembre a las 05:30 UTC. Alcance: código local, PostgreSQL Cloud en modo de solo lectura, metadatos de funciones desplegadas y descargas públicas de Storage. No se consultaron secretos ni se crearon contenedores/publicaciones en Meta.
 
