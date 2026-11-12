@@ -19,13 +19,17 @@ on:
         required: true
         type: string
 
+env:
+  # Current reviewed maintenance epoch; a backend epoch change blocks deployment.
+  PAGES_MAINTENANCE_EPOCH: 3cd91507-439a-4a97-85bc-1dac9d218856
+
 permissions:
   contents: read
   pages: write
   id-token: write
 
 concurrency:
-  group: pages-${{ github.event_name }}
+  group: pages-main
   cancel-in-progress: false
 
 jobs:
@@ -48,18 +52,18 @@ jobs:
       - name: Lint and test
         run: npm run lint && npm test
       - name: Verify exact authorized release
-        if: github.event_name == 'workflow_dispatch' && inputs.release_instagram
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))
         run: node scripts/check-pages-release.mjs
         env:
-          EXPECTED_RELEASE_SHA: ${{ inputs.expected_sha }}
-          EXPECTED_DEPLOYMENT_EPOCH: ${{ inputs.deployment_epoch }}
+          EXPECTED_RELEASE_SHA: ${{ github.event_name == 'push' && github.sha || inputs.expected_sha }}
+          EXPECTED_DEPLOYMENT_EPOCH: ${{ github.event_name == 'push' && env.PAGES_MAINTENANCE_EPOCH || inputs.deployment_epoch }}
       - name: Check Instagram release compatibility
-        if: github.event_name == 'workflow_dispatch' && inputs.release_instagram
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))
         run: node scripts/check-instagram-release.mjs frontend-maintenance
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          EXPECTED_DEPLOYMENT_EPOCH: ${{ inputs.deployment_epoch }}
+          EXPECTED_DEPLOYMENT_EPOCH: ${{ github.event_name == 'push' && env.PAGES_MAINTENANCE_EPOCH || inputs.deployment_epoch }}
       - name: Build site
         run: npm run build
         env:
@@ -67,23 +71,24 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_WHATSAPP_NUMBER: ${{ vars.VITE_WHATSAPP_NUMBER }}
       - name: Record approved artifact identity
-        if: github.event_name == 'workflow_dispatch' && inputs.release_instagram
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))
         run: node scripts/write-pages-receipt.mjs
         env:
-          EXPECTED_RELEASE_SHA: ${{ inputs.expected_sha }}
-          EXPECTED_DEPLOYMENT_EPOCH: ${{ inputs.deployment_epoch }}
+          EXPECTED_RELEASE_SHA: ${{ github.event_name == 'push' && github.sha || inputs.expected_sha }}
+          EXPECTED_DEPLOYMENT_EPOCH: ${{ github.event_name == 'push' && env.PAGES_MAINTENANCE_EPOCH || inputs.deployment_epoch }}
       - name: Audit built artifact
         run: node scripts/check-release-files.mjs --dist
       - name: Configure Pages
-        if: github.event_name == 'workflow_dispatch' && inputs.release_instagram
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))
         uses: actions/configure-pages@v5
       - name: Upload site artifact
-        if: github.event_name == 'workflow_dispatch' && inputs.release_instagram
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))
         uses: actions/upload-pages-artifact@v4
         with:
           path: ./dist
 
   deploy:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -101,14 +106,14 @@ jobs:
       - name: Recheck exact authorized release
         run: node scripts/check-pages-release.mjs
         env:
-          EXPECTED_RELEASE_SHA: ${{ inputs.expected_sha }}
-          EXPECTED_DEPLOYMENT_EPOCH: ${{ inputs.deployment_epoch }}
+          EXPECTED_RELEASE_SHA: ${{ github.event_name == 'push' && github.sha || inputs.expected_sha }}
+          EXPECTED_DEPLOYMENT_EPOCH: ${{ github.event_name == 'push' && env.PAGES_MAINTENANCE_EPOCH || inputs.deployment_epoch }}
       - name: Recheck Instagram release before activation
         run: node scripts/check-instagram-release.mjs frontend-maintenance
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          EXPECTED_DEPLOYMENT_EPOCH: ${{ inputs.deployment_epoch }}
+          EXPECTED_DEPLOYMENT_EPOCH: ${{ github.event_name == 'push' && env.PAGES_MAINTENANCE_EPOCH || inputs.deployment_epoch }}
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5.0.1

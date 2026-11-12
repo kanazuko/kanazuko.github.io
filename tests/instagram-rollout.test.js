@@ -130,8 +130,8 @@ test('deployment preflight blocks incompatible functions and premature Pages act
   await deployInstagramFunctions({ env, projectRef, execute: true, fetchImpl, runCommand })
   assert.equal(deployments, 3) // Only the spy was invoked, never the real CLI.
   await assert.rejects(deployInstagramFunctions({ env, projectRef: 'zzzzzzzzzzzzzzzzzzzz', fetchImpl, runCommand }), /does not match/)
-  const workflow = await readFile(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8')
-  assert.match(workflow, /deploy:\s+if: github.event_name == 'workflow_dispatch' && inputs.release_instagram/)
+  const workflow = (await readFile(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8')).replaceAll('\r\n', '\n')
+  assert.ok(workflow.includes("deploy:\n    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))"))
   assert.match(workflow, /Recheck Instagram release before activation/)
   const healthCalls = []
   const healthFetch = async (url, options) => {

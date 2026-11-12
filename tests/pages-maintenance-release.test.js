@@ -21,18 +21,21 @@ test('maintenance frontend release requires exact project/epoch, keeps frontend_
   await assert.rejects(checkInstagramRelease({...options,url:'https://other.supabase.co'}))
 })
 
-test('Pages dispatch is bound to approved SHA/main and cannot authorize a push deployment',()=>{
+test('Pages push and dispatch require exact SHA/main and maintenance epoch',()=>{
   const env={GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/main',GITHUB_SHA:'a'.repeat(40),EXPECTED_RELEASE_SHA:'a'.repeat(40),EXPECTED_DEPLOYMENT_EPOCH:epoch}
   assert.equal(checkPagesRelease(env),true)
-  for(const patch of [{GITHUB_EVENT_NAME:'push'},{GITHUB_REF:'refs/heads/other'},{EXPECTED_RELEASE_SHA:'b'.repeat(40)},{EXPECTED_DEPLOYMENT_EPOCH:''}])assert.throws(()=>checkPagesRelease({...env,...patch}))
+  assert.equal(checkPagesRelease({...env,GITHUB_EVENT_NAME:'push'}),true)
+  for(const patch of [{GITHUB_EVENT_NAME:'pull_request'},{GITHUB_REF:'refs/heads/other'},{EXPECTED_RELEASE_SHA:'b'.repeat(40)},{EXPECTED_DEPLOYMENT_EPOCH:''}])assert.throws(()=>checkPagesRelease({...env,...patch}))
 })
 
-test('artifact receipt proves exact SHA/epoch without credentials and cannot be generated for a push',async()=>{
+test('artifact receipt records exact SHA/epoch for push and dispatch',async()=>{
   const env={GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/main',GITHUB_SHA:'a'.repeat(40),EXPECTED_RELEASE_SHA:'a'.repeat(40),EXPECTED_DEPLOYMENT_EPOCH:epoch}
   const dir=await mkdtemp(join(tmpdir(),'prart-pages-receipt-test-'))
   await writePagesReceipt(env,dir)
   assert.deepEqual(JSON.parse(await readFile(join(dir,'release.json'),'utf8')),{sha:env.GITHUB_SHA,deployment_epoch:epoch,maintenance_expected:true})
-  await assert.rejects(writePagesReceipt({...env,GITHUB_EVENT_NAME:'push'},dir))
+  await writePagesReceipt({...env,GITHUB_EVENT_NAME:'push'},dir)
+  assert.equal(JSON.parse(await readFile(join(dir,'release.json'),'utf8')).sha,env.GITHUB_SHA)
+  await assert.rejects(writePagesReceipt({...env,GITHUB_EVENT_NAME:'pull_request'},dir))
 })
 
 test('configured build inherits only the selected public Vite values, not private credentials',()=>{
@@ -51,12 +54,16 @@ test('release audit reports locations/kinds, never secret values; rejects privat
   assert.equal(sensitivePath('supabase/migrations/example.sql'),false)
 })
 
-test('workflow keeps uploads/deployment dispatch-gated and rechecks SHA/epoch',async()=>{
-  const workflow=await readFile(new URL('../.github/workflows/deploy-pages.yml',import.meta.url),'utf8')
-  assert.match(workflow,/deploy:\s+if: github.event_name == 'workflow_dispatch' && inputs.release_instagram && github.ref == 'refs\/heads\/main'/)
+test('workflow permits main push and opted-in dispatch with SHA/epoch checks',async()=>{
+  const workflow=(await readFile(new URL('../.github/workflows/deploy-pages.yml',import.meta.url),'utf8')).replaceAll('\r\n','\n')
+  const gate = "if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_instagram))"
+  assert.ok(workflow.includes('deploy:\n    ' + gate))
+  assert.ok(workflow.includes('Upload site artifact\n        ' + gate))
+  assert.ok(workflow.includes("github.event_name == 'push' && github.sha || inputs.expected_sha"))
+  assert.ok(workflow.includes("github.event_name == 'push' && env.PAGES_MAINTENANCE_EPOCH || inputs.deployment_epoch"))
+  assert.match(workflow,/group: pages-main/)
   assert.equal((workflow.match(/run: node scripts\/check-pages-release.mjs/g)||[]).length,2)
   assert.equal((workflow.match(/run: node scripts\/check-instagram-release.mjs frontend-maintenance/g)||[]).length,2)
-  assert.match(workflow,/Upload site artifact\s+if: github.event_name == 'workflow_dispatch' && inputs.release_instagram/)
   assert.doesNotMatch(workflow,/set_instagram_maintenance|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_ADMIN_ACCESS_TOKEN/)
 })
 
