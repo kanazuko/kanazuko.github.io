@@ -60,3 +60,8 @@ id_ed25519
 /scripts/backup-instagram-private.mjs
 /scripts/preflight-instagram-private.ps1
 /scripts/preflight-instagram-private.mjs
+/scripts/preflight-instagram-private.sql
+/scripts/preflight-instagram-private-validation.mjs
+/scripts/acl-instagram-private.ps1
+/scripts/acl-instagram-private.mjs
+/scripts/acl-instagram-private.sql

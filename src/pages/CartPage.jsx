@@ -104,7 +104,7 @@ export default function CartPage() {
             <p className="checkout-total">Total de productos <strong>{ready ? formatCurrency(total) : 'Por confirmar'}</strong></p>
             <p className="field-help">Sin pago en línea. Disponibilidad y cualquier costo de entrega se confirmarán contigo. Usaremos tus datos para atender este pedido.</p>
             {error && <p className="form-banner form-banner--error" role="alert">{error}</p>}
-            <button className="button" type="submit" disabled={submitting || !ready || unavailable}>{submitting ? 'Guardando pedido…' : 'Finalizar compra'}</button>
+            <button className="button" type="submit" disabled={submitting || !ready || unavailable}>{submitting ? 'Guardando pedido…' : 'Realizar orden'}</button>
           </form>
         </div>
       )}
