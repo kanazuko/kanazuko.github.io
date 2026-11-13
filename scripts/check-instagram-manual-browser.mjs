@@ -21,6 +21,14 @@ try {
   let saved = null
   const unexpected = []
   const errors = []
+  const page = await context.newPage()
+  const webp = Buffer.from(await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 400; canvas.height = 700
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#bfa15c'; ctx.fillRect(0, 0, 400, 700)
+    return canvas.toDataURL('image/webp').split(',')[1]
+  }), 'base64')
   await context.route('**/*', async route => {
     const request = route.request()
     const url = new URL(request.url())
@@ -37,12 +45,11 @@ try {
         saved = { id: '22222222-2222-4222-8222-222222222222', ...request.postDataJSON(), updated_at: new Date().toISOString() }
         return respond(saved)
       }
-      if (url.pathname.includes('/public/product-images/')) return route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64'), headers: { 'Access-Control-Allow-Origin': '*' } })
+      if (url.pathname.includes('/public/product-images/')) return route.fulfill({ contentType: 'image/webp', body: webp, headers: { 'Access-Control-Allow-Origin': '*' } })
     }
     unexpected.push(url.pathname)
     return route.abort()
   })
-  const page = await context.newPage()
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('http://127.0.0.1:5181/#/admin/instagram')
   await page.getByLabel('Categoría', { exact: true }).selectOption('necklaces')
@@ -60,7 +67,17 @@ try {
   await page.getByRole('status').filter({ hasText: 'Borrador guardado' }).waitFor()
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Descargar foto 1' }).click()
-  assert.match((await download).suggestedFilename(), /\.png$/)
+  const downloaded = await download
+  assert.match(downloaded.suggestedFilename(), /\.jpg$/)
+  const chunks = []
+  for await (const chunk of await downloaded.createReadStream()) chunks.push(chunk)
+  const jpeg = Buffer.concat(chunks)
+  assert.equal(jpeg.subarray(0, 3).toString('hex'), 'ffd8ff', 'Downloaded file must contain actual JPEG bytes')
+  const dimensions = await page.evaluate(async bytes => {
+    const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }))
+    const result = [bitmap.width, bitmap.height]; bitmap.close(); return result
+  }, [...jpeg])
+  assert.deepEqual(dimensions, [1080, 1080])
   await page.getByLabel('Enlace de la publicación').fill('https://evil.test/p/ABC/')
   await page.getByLabel('Ya publiqué').check()
   await page.getByRole('button', { name: 'Marcar como completado' }).click()

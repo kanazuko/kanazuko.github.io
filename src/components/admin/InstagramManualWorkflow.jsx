@@ -88,12 +88,12 @@ function ManualWorkspace({ products, records: initialRecords, publishedProductId
       </fieldset>
       <fieldset className="instagram-fields" disabled={busy}>
         <legend>3. Descarga las fotos</legend>
-        <p>Pulsa una foto para abrir el archivo original en otra pestaña a resolución nativa. También puedes arrastrar la imagen o descargarla.</p>
+        <p>Descarga las fotos en JPG para subirlas a Instagram: 1080 × 1080 píxeles, sin recortar y con fondo blanco. Al abrir o arrastrar la miniatura obtienes el archivo original, que puede ser WebP.</p>
         <div className="instagram-image-grid">{product.images.map((image, index) => <div className="instagram-image-choice" key={image.id}>
           <a href={image.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir foto ${index + 1} original`}>
             <SafeImage src={image.url} alt={image.alt_text || product.name} loading="lazy" draggable />
           </a>
-          <button type="button" className="admin-button admin-button--secondary" onClick={() => download(image, index)}>Descargar foto {index + 1}</button>
+          <button type="button" className="admin-button admin-button--secondary" onClick={() => download(image, index)}>Descargar foto {index + 1} en JPG</button>
         </div>)}</div>
         {!product.images.length && <p>Este producto no tiene fotos. Añádelas desde la edición del producto.</p>}
       </fieldset>

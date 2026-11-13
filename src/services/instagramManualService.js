@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import { catalogImageUrl } from '../utils/instagram'
+import { catalogImageUrl, createInstagramJpeg } from '../utils/instagram'
 import { normalizeInstagramPostUrl } from '../utils/instagramManual'
 import { loadInstagramPublishedProductIds } from './instagramService'
 
@@ -33,15 +33,11 @@ export async function saveManualInstagramPost(product, record, caption, url, com
 }
 
 export async function downloadManualInstagramPhoto(image, index) {
-  const response = await fetch(image.url, { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000) })
-  if (!response.ok) throw new Error('No se pudo descargar la foto. Inténtalo de nuevo.')
-  const blob = await response.blob()
-  if (!blob.type.startsWith('image/')) throw new Error('El archivo no es una imagen válida.')
-  const extension = image.storage_path.split('.').pop()?.replace(/[^a-z0-9]/gi, '') || 'jpg'
+  const blob = await createInstagramJpeg(image.url)
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `producto-${image.product_id}-${index + 1}.${extension}`
+  anchor.download = `producto-${image.product_id}-${index + 1}.jpg`
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
