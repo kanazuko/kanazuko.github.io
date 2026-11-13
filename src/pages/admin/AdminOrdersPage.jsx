@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
+import SafeImage from '../../components/catalog/SafeImage'
 import ConfirmDialog from '../../components/feedback/ConfirmDialog'
 import LoadingState from '../../components/feedback/LoadingState'
 import Notification from '../../components/feedback/Notification'
@@ -22,6 +23,7 @@ function OrderDetail({ order }) {
       {loading ? <LoadingState label="Cargando piezas…" /> : error ? <div><p role="alert">No pudimos cargar las piezas.</p><button className="admin-button admin-button--secondary" onClick={() => setRetry((current) => current + 1)}>Reintentar</button></div> : (
         <div className="order-items">
           {data?.items.map((item) => <article key={item.id}>
+            <div className="order-item__image">{item.primaryImage ? <SafeImage key={item.primaryImage.url} src={item.primaryImage.url} alt={item.primaryImage.alt_text || item.product_name} loading="lazy" /> : <span>Sin imagen</span>}</div>
             <div><strong>{item.product_name}</strong><p>{[item.product_sku && `SKU: ${item.product_sku}`, item.material, item.color, item.size].filter(Boolean).join(' · ')}</p><small>{formatAvailability(item.availability)} al pedir</small>{item.product_id && <p><Link to={`/admin/productos/${item.product_id}/editar`}>Ver producto actual</Link></p>}</div>
             <div><span>{item.quantity} × {formatCurrency(item.unit_price)}</span><strong>{formatCurrency(Math.round(Number(item.unit_price) * 100) * item.quantity / 100)}</strong></div>
           </article>)}

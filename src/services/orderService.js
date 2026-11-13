@@ -37,9 +37,15 @@ export async function getAdminOrders({ status = '', page = 0 } = {}) {
 }
 
 export async function getAdminOrderItems(orderId) {
-  const { data, error } = await supabase.from('order_items').select('id, product_id, product_name, product_sku, material, color, size, availability, unit_price, quantity').eq('order_id', orderId).order('product_name')
+  const { data, error } = await supabase.from('order_items').select('id, product_id, product_name, product_sku, material, color, size, availability, unit_price, quantity, product:products(images:product_images(id, storage_path, alt_text, sort_order))').eq('order_id', orderId).order('product_name')
   if (error) throw error
-  return data
+  return data.map(({ product, ...item }) => {
+    const image = [...(product?.images ?? [])].sort((a, b) => a.sort_order - b.sort_order)[0]
+    return {
+      ...item,
+      primaryImage: image ? { ...image, url: supabase.storage.from('product-images').getPublicUrl(image.storage_path).data.publicUrl } : null,
+    }
+  })
 }
 
 export async function updateOrderStatus(id, status, previousStatus) {

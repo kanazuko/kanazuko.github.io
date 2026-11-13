@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import { getInstagramRuntime, getInstagramStatus, resumeInstagramQueries } from '../../services/instagramService'
 import InstagramComposer from '../../components/admin/InstagramComposer'
+import InstagramManualWorkflow from '../../components/admin/InstagramManualWorkflow'
 
 export default function AdminInstagramPage() {
+  return <InstagramManualWorkflow />
+}
+
+export function InstagramApiPanel() {
   const [checking, setChecking] = useState(false)
   const [account, setAccount] = useState(null)
   const [error, setError] = useState('')

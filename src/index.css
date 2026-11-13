@@ -384,6 +384,9 @@ p { line-height: 1.7; }
 .order-address { white-space: pre-wrap; }
 .order-items article { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--color-border); }
 .order-items p { margin: 0.4rem 0; }
+.order-item__image { width: 6rem; height: 6rem; flex: 0 0 6rem; display: grid; place-items: center; overflow: hidden; border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-muted); font-size: 0.8rem; text-align: center; }
+.order-item__image img { width: 100%; height: 100%; object-fit: contain; }
+.order-item__image + div { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
 .order-items article > div:last-child { display: grid; align-content: start; gap: 0.5rem; }
 .orders-pagination { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; }
 

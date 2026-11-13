@@ -2,6 +2,14 @@
 
 Catálogo estático creado con React y Vite, publicado en GitHub Pages.
 
+## Instagram manual
+
+`/admin/instagram` permite seleccionar un producto, generar y editar su descripción, guardar un borrador, copiar el texto y descargar cada foto del catálogo. Después de publicar desde Instagram, pega el enlace y confirma que ya publicaste para marcar el producto como completado. El registro se guarda en Supabase y permite corregir el enlace después. Las publicaciones manuales se registran por separado del historial de la API; este flujo no consulta Meta ni depende de su estado de mantenimiento.
+
+Antes de publicar este frontend, aplica `supabase/migrations/20261114120000_instagram_manual_posts.sql` al proyecto correspondiente. Con la CLI vinculada, revisa `npx supabase db push --dry-run` y aplica las migraciones pendientes con `npx supabase db push`. No ejecutes además el mismo SQL manualmente. La migración conserva los registros aunque se elimine el producto y restringe el acceso a administradores.
+
+Validación específica: `node --test tests/instagram-manual.test.js` y `node scripts/check-instagram-manual-browser.mjs`. La prueba de navegador simula Supabase y las imágenes; no publica ni modifica datos reales.
+
 ## Desarrollo
 
 ```bash
