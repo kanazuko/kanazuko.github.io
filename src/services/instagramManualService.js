@@ -1,17 +1,20 @@
 import { supabase } from '../lib/supabase'
 import { catalogImageUrl } from '../utils/instagram'
 import { normalizeInstagramPostUrl } from '../utils/instagramManual'
+import { loadInstagramPublishedProductIds } from './instagramService'
 
 export async function loadManualInstagramWorkspace() {
-  const [catalog, history] = await Promise.all([
-    supabase.from('products').select('id,name,price,description,images:product_images(id,product_id,storage_path,alt_text,sort_order)').order('name'),
+  const [catalog, history, publishedProductIds] = await Promise.all([
+    supabase.from('products').select('id,name,price,description,is_featured,category:categories!products_category_id_fkey(id,name),images:product_images(id,product_id,storage_path,alt_text,sort_order)').order('name'),
     supabase.from('instagram_manual_posts').select('*').order('updated_at', { ascending: false }),
+    loadInstagramPublishedProductIds({ includeManual: false }),
   ])
   if (catalog.error) throw new Error('No se pudo cargar el catálogo.')
   if (history.error) throw new Error('No se pudo cargar el registro manual. Comprueba que se haya aplicado la migración 20261114120000_instagram_manual_posts.sql y que tengas acceso de administrador.')
   return {
     products: catalog.data.map(product => ({ ...product, images: (product.images || []).sort((a, b) => a.sort_order - b.sort_order).map(image => ({ ...image, url: catalogImageUrl(supabase, image) })) })),
     records: history.data,
+    publishedProductIds,
   }
 }
 

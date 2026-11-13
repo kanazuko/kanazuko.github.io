@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import '../../instagram.css'
 import SafeImage from '../catalog/SafeImage'
 import LoadingState from '../feedback/LoadingState'
@@ -6,7 +6,7 @@ import { useAsyncData } from '../../hooks/useAsyncData'
 import { loadManualInstagramWorkspace, saveManualInstagramPost, downloadManualInstagramPhoto } from '../../services/instagramManualService'
 import { DEFAULT_INSTAGRAM_TEMPLATE, generateInstagramCaption } from '../../utils/instagram'
 
-function ManualWorkspace({ products, records: initialRecords }) {
+function ManualWorkspace({ products, records: initialRecords, publishedProductIds, onDirtyChange }) {
   const [records, setRecords] = useState(initialRecords)
   const [productId, setProductId] = useState('')
   const [caption, setCaption] = useState('')
@@ -16,6 +16,13 @@ function ManualWorkspace({ products, records: initialRecords }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [search, setSearch] = useState('')
+  const [featuredOnly, setFeaturedOnly] = useState(false)
+  useEffect(() => { onDirtyChange?.(dirty || busy) }, [dirty, busy, onDirtyChange])
+  const categories = [...new Map(products.filter(item => item.category).map(item => [item.category.id, item.category])).values()].sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  const visibleProducts = products.filter(item => (!categoryId || item.category?.id === categoryId) && (!featuredOnly || item.is_featured) && item.name.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es')))
+  const publishedIds = new Set([...publishedProductIds, ...records.filter(item => item.completed_at).map(item => item.product_id)])
   const product = products.find(item => item.id === productId)
   const record = records.find(item => item.product_id === productId)
 
@@ -50,10 +57,16 @@ function ManualWorkspace({ products, records: initialRecords }) {
     {notice && <p role="status">{notice}</p>}
     <fieldset className="instagram-fields" disabled={busy}>
       <legend>1. Selecciona un producto</legend>
+      <label>Buscar producto<input type="search" value={search} onChange={event => setSearch(event.target.value)} /></label>
+      <label>Categoría<select aria-label="Categoría" value={categoryId} onChange={event => setCategoryId(event.target.value)}><option value="">Todas las categorías</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+      <label><span><input type="checkbox" checked={featuredOnly} onChange={event => setFeaturedOnly(event.target.checked)} /> Solo destacados</span></label>
       <label>Producto<select aria-label="Producto" value={productId} onChange={event => selectProduct(event.target.value)}>
         <option value="">Seleccionar producto…</option>
-        {products.map(item => <option key={item.id} value={item.id}>{records.some(saved => saved.product_id === item.id && saved.completed_at) ? '✓ Completado · ' : ''}{item.name}</option>)}
+        {product && !visibleProducts.some(item => item.id === productId) && <option value={productId}>{publishedIds.has(productId) ? '✓ Publicado · ' : ''}{product.name} (seleccionado fuera del filtro)</option>}
+        {visibleProducts.map(item => <option key={item.id} value={item.id}>{publishedIds.has(item.id) ? '✓ Publicado · ' : ''}{item.name}</option>)}
       </select></label>
+      {!visibleProducts.length && products.length > 0 && <p>No hay productos que coincidan con los filtros.</p>}
+      <small>✓ Publicado en Instagram mediante la API o completado manualmente.</small>
       {!products.length && <p>No hay productos en el catálogo.</p>}
     </fieldset>
     {product && <>
@@ -75,9 +88,11 @@ function ManualWorkspace({ products, records: initialRecords }) {
       </fieldset>
       <fieldset className="instagram-fields" disabled={busy}>
         <legend>3. Descarga las fotos</legend>
-        <p>Descarga las fotos que usarás y elige su orden al crear la publicación en Instagram.</p>
+        <p>Pulsa una foto para abrir el archivo original en otra pestaña a resolución nativa. También puedes arrastrar la imagen o descargarla.</p>
         <div className="instagram-image-grid">{product.images.map((image, index) => <div className="instagram-image-choice" key={image.id}>
-          <SafeImage src={image.url} alt={image.alt_text || product.name} loading="lazy" />
+          <a href={image.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir foto ${index + 1} original`}>
+            <SafeImage src={image.url} alt={image.alt_text || product.name} loading="lazy" draggable />
+          </a>
           <button type="button" className="admin-button admin-button--secondary" onClick={() => download(image, index)}>Descargar foto {index + 1}</button>
         </div>)}</div>
         {!product.images.length && <p>Este producto no tiene fotos. Añádelas desde la edición del producto.</p>}
@@ -109,12 +124,12 @@ function ManualWorkspace({ products, records: initialRecords }) {
   </div>
 }
 
-export default function InstagramManualWorkflow() {
+export default function InstagramManualWorkflow({ onDirtyChange }) {
   const [revision, setRevision] = useState(0)
   const loader = useCallback(async () => ({ ...await loadManualInstagramWorkspace(), revision }), [revision])
   const { data, loading, error } = useAsyncData(loader)
   return <div className="admin-page">
     <header className="admin-page__header"><div><h1>Instagram · publicación manual</h1><p>Prepara el contenido aquí, publícalo desde Instagram y registra el enlace al terminar.</p></div></header>
-    {loading ? <LoadingState label="Cargando productos y publicaciones…" /> : error ? <div><p role="alert">{error.message}</p><button type="button" className="admin-button" onClick={() => setRevision(value => value + 1)}>Reintentar</button></div> : data && <ManualWorkspace {...data} />}
+    {loading ? <LoadingState label="Cargando productos y publicaciones…" /> : error ? <div><p role="alert">{error.message}</p><button type="button" className="admin-button" onClick={() => setRevision(value => value + 1)}>Reintentar</button></div> : data && <ManualWorkspace {...data} onDirtyChange={onDirtyChange} />}
   </div>
 }

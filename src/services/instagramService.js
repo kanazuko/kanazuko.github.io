@@ -83,7 +83,7 @@ export async function loadInstagramDrafts() {
 }
 
 // Separate from the 50-row history so older publications keep their marker.
-export async function loadInstagramPublishedProductIds() {
+export async function loadInstagramPublishedProductIds({ includeManual = true } = {}) {
   const ids = new Set()
   const pageSize = 1000
   for (let offset = 0; ; offset += pageSize) {
@@ -93,8 +93,17 @@ export async function loadInstagramPublishedProductIds() {
       .order('id').range(offset, offset + pageSize - 1)
     if (error) throw new Error('No se pudieron consultar los productos publicados en Instagram.')
     for (const post of data) for (const id of post.product_ids) ids.add(id)
-    if (data.length < pageSize) return ids
+    if (data.length < pageSize) break
   }
+  if (includeManual) {
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase.from('instagram_manual_posts').select('id,product_id').not('completed_at', 'is', null).order('id').range(offset, offset + pageSize - 1)
+      if (error) throw new Error('No se pudieron consultar las publicaciones manuales de Instagram.')
+      for (const post of data) if (post.product_id) ids.add(post.product_id)
+      if (data.length < pageSize) break
+    }
+  }
+  return ids
 }
 
 export async function saveInstagramDraft(draft) {

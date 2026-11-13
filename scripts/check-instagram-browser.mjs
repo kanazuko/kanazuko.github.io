@@ -58,6 +58,7 @@ try {
     if (url.pathname === '/rest/v1/admin_users') return respond({ user_id: adminId })
     if (url.pathname === '/rest/v1/products') return respond(catalog)
     if (url.pathname === '/rest/v1/instagram_posts') return respond(draft ? [draft] : [])
+    if (url.pathname === '/rest/v1/instagram_manual_posts') return respond([])
     if (url.pathname.includes('/public/product-images/')) return route.fulfill({ body: webp, contentType: 'image/webp', headers: { 'Access-Control-Allow-Origin': '*' } })
     if (url.pathname.includes('/public/instagram-prepared/')) return route.fulfill({ body: uploads[0], contentType: 'image/jpeg', headers: { 'Access-Control-Allow-Origin': '*' } })
     if (url.pathname === '/rest/v1/rpc/save_instagram_draft') {
@@ -91,6 +92,7 @@ try {
     return route.abort()
   })
   await page.goto('http://127.0.0.1:5181/#/admin/instagram')
+  await page.getByRole('button', { name: 'Publicación por API', exact: true }).click()
   await page.getByLabel('Anillo de prueba ·').check()
   const productRows = page.locator('.instagram-product-list label')
   await page.getByLabel('Mostrar primero').selectOption('featured')

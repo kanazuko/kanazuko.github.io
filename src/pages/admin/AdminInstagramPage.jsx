@@ -4,7 +4,24 @@ import InstagramComposer from '../../components/admin/InstagramComposer'
 import InstagramManualWorkflow from '../../components/admin/InstagramManualWorkflow'
 
 export default function AdminInstagramPage() {
-  return <InstagramManualWorkflow />
+  const [mode, setMode] = useState(() => {
+    try { return sessionStorage.getItem('instagram-publication-mode') === 'api' ? 'api' : 'manual' } catch { return 'manual' }
+  })
+  const [manualDirty, setManualDirty] = useState(false)
+  function switchMode(next) {
+    if (next === mode) return
+    if ((manualDirty || mode === 'api') && !window.confirm('¿Cambiar de modo? Los cambios que no hayas guardado se perderán.')) return
+    setManualDirty(false)
+    setMode(next)
+    try { sessionStorage.setItem('instagram-publication-mode', next) } catch { /* Mode remains available without storage. */ }
+  }
+  return <>
+    <div className="instagram-actions" role="group" aria-label="Modo de publicación">
+      <button type="button" className="admin-button admin-button--secondary" aria-pressed={mode === 'manual'} onClick={() => switchMode('manual')}>Publicación manual</button>
+      <button type="button" className="admin-button admin-button--secondary" aria-pressed={mode === 'api'} onClick={() => switchMode('api')}>Publicación por API</button>
+    </div>
+    {mode === 'manual' ? <InstagramManualWorkflow onDirtyChange={setManualDirty} /> : <InstagramApiPanel />}
+  </>
 }
 
 export function InstagramApiPanel() {
