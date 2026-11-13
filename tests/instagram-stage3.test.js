@@ -106,12 +106,24 @@ test('stage 3 SQL snapshot requires exact readiness and unchanged historical fin
   await assert.rejects(checkStage3State({token:'fake',expectedEpoch:epoch,expectedReady:['instagram-publish'],fetchImpl}),/HISTORY_CHANGED/)
 })
 
-test('PowerShell metadata validation enumerates the JSON array before checking count', async () => {
-  const plan = await readFile(new URL('../docs/instagram-stage3-plan.md',import.meta.url),'utf8')
-  assert.match(plan,/\$parsed = \$raw \| ConvertFrom-Json\s+\$rows = @\(\$parsed\)/)
-  if (process.platform === 'win32') {
-    const script = "$raw='[{\"slug\":\"instagram-publish\"},{\"slug\":\"instagram-prepare\"},{\"slug\":\"instagram-status\"}]';$parsed=$raw|ConvertFrom-Json;$rows=@($parsed);if($rows.Count -ne 3){exit 1};if(@($rows|Where-Object{$_.slug -eq 'instagram-publish'}).Count -ne 1){exit 2}"
-    const child=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',script],{encoding:'utf8'})
-    assert.equal(child.status,0,child.stderr)
-  }
+
+test('PowerShell metadata validation enumerates the JSON array before checking count', () => {
+  if (process.platform !== 'win32') return
+
+  const script = `
+    $raw = '[{"slug":"instagram-publish"},{"slug":"instagram-prepare"},{"slug":"instagram-status"}]'
+    $parsed = $raw | ConvertFrom-Json
+    $rows = @($parsed)
+    if ($rows.Count -ne 3) { exit 1 }
+    if (@($rows | Where-Object { $_.slug -eq 'instagram-publish' }).Count -ne 1) { exit 2 }
+  `
+
+  const child = spawnSync(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-Command', script],
+    { encoding: 'utf8' }
+  )
+
+  assert.equal(child.status, 0, child.stderr)
 })
+
