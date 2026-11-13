@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
+import ConfirmDialog from '../../components/feedback/ConfirmDialog'
 import LoadingState from '../../components/feedback/LoadingState'
 import Notification from '../../components/feedback/Notification'
 import { useAsyncData } from '../../hooks/useAsyncData'
-import { getAdminOrderItems, getAdminOrders, ORDER_STATUSES, updateOrderStatus } from '../../services/orderService'
+import { deleteAdminOrder, getAdminOrderItems, getAdminOrders, ORDER_STATUSES, updateOrderStatus } from '../../services/orderService'
 import { formatAvailability, formatCurrency } from '../../utils/formatters'
 
 function OrderDetail({ order }) {
@@ -37,6 +38,7 @@ export default function AdminOrdersPage() {
   const [revision, setRevision] = useState(0)
   const [expandedId, setExpandedId] = useState(null)
   const [savingId, setSavingId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [notification, setNotification] = useState(null)
   const loader = useCallback(async () => ({ ...await getAdminOrders({ status, page }), status, page, revision }), [status, page, revision])
   const { data, loading, error } = useAsyncData(loader)
@@ -54,6 +56,23 @@ export default function AdminOrdersPage() {
     } finally { setSavingId(null) }
   }
 
+  async function deleteOrder() {
+    if (!deleteTarget || savingId) return
+    setSavingId(deleteTarget.id)
+    try {
+      await deleteAdminOrder(deleteTarget.id)
+      setNotification({ type: 'success', message: `Pedido #${deleteTarget.order_number} eliminado.` })
+      setExpandedId((id) => id === deleteTarget.id ? null : id)
+      if (data.orders.length === 1 && page > 0) setPage((value) => value - 1)
+      setRevision((value) => value + 1)
+    } catch (deleteError) {
+      setNotification({ type: 'error', message: deleteError.message || 'No fue posible eliminar el pedido.' })
+    } finally {
+      setDeleteTarget(null)
+      setSavingId(null)
+    }
+  }
+
   return (
     <div className="admin-page">
       <header className="admin-page__header"><div><p className="eyebrow">Venta por catálogo</p><h1>Pedidos</h1><p>Consulta las piezas solicitadas y organiza su compra y entrega.</p></div><button className="admin-button admin-button--secondary" disabled={loading || Boolean(savingId)} onClick={() => setRevision((value) => value + 1)}>Actualizar</button></header>
@@ -68,6 +87,7 @@ export default function AdminOrdersPage() {
                 <div><h2>Pedido #{order.order_number}</h2><p>{order.customer_name} · {new Date(order.created_at).toLocaleString('es-MX')}</p><strong>{formatCurrency(order.total)}</strong></div>
                 <div className="field"><label htmlFor={`status-${order.id}`}>Estado del pedido</label><select id={`status-${order.id}`} value={order.status} disabled={Boolean(savingId)} onChange={(event) => changeStatus(order, event.target.value)}>{Object.entries(ORDER_STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                 <button type="button" className="admin-button admin-button--secondary" aria-expanded={expandedId === order.id} aria-controls={`detail-${order.id}`} onClick={() => setExpandedId((currentId) => currentId === order.id ? null : order.id)}>{expandedId === order.id ? 'Ocultar detalle' : 'Ver detalle'}</button>
+                <button type="button" className="admin-button admin-button--danger" disabled={Boolean(savingId)} aria-label={`Eliminar pedido #${order.order_number}`} onClick={() => setDeleteTarget(order)}>Eliminar pedido</button>
               </div>
               {expandedId === order.id && <div id={`detail-${order.id}`}><OrderDetail order={order} /></div>}
             </section>)}
@@ -76,6 +96,7 @@ export default function AdminOrdersPage() {
           <div className="orders-pagination"><button className="admin-button admin-button--secondary" disabled={page === 0 || Boolean(savingId)} onClick={() => setPage((value) => value - 1)}>Anterior</button><span>Página {page + 1} de {Math.max(1, Math.ceil(data.count / 25))}</span><button className="admin-button admin-button--secondary" disabled={(page + 1) * 25 >= data.count || Boolean(savingId)} onClick={() => setPage((value) => value + 1)}>Siguiente</button></div>
         </>
       )}
+      <ConfirmDialog open={Boolean(deleteTarget)} title="Eliminar pedido" message={`¿Eliminar el pedido #${deleteTarget?.order_number} de ${deleteTarget?.customer_name}? Se borrarán el pedido y sus partidas. Esta acción no se puede deshacer.`} confirmLabel="Eliminar pedido" busy={Boolean(savingId)} onConfirm={deleteOrder} onCancel={() => setDeleteTarget(null)} />
     </div>
   )
 }

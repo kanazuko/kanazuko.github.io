@@ -46,6 +46,7 @@ test('PostgreSQL order creation and access policies', async (t) => {
     `)
     await db.exec(await readFile(new URL('../supabase/migrations/20261026214609_initial_schema.sql', import.meta.url), 'utf8'))
     await db.exec(await readFile(new URL('../supabase/migrations/20261030120000_add_catalog_orders.sql', import.meta.url), 'utf8'))
+    await db.exec(await readFile(new URL('../supabase/migrations/20261113120000_allow_admin_order_deletion.sql', import.meta.url), 'utf8'))
     await db.query('INSERT INTO auth.users(id) VALUES ($1), ($2)', [adminId, userId])
     await db.query('INSERT INTO public.admin_users(user_id) VALUES ($1)', [adminId])
     await db.query(`INSERT INTO public.products(id, name, slug, sku, price, is_published, color, size, availability) VALUES
@@ -111,8 +112,9 @@ test('PostgreSQL order creation and access policies', async (t) => {
       assert.equal((await asRole('authenticated', 'SELECT * FROM public.order_items', [], userId)).rows.length, 0)
       for (const role of ['anon', 'authenticated']) {
         await assert.rejects(asRole(role, 'INSERT INTO public.orders DEFAULT VALUES', [], userId), /permission denied/)
-        await assert.rejects(asRole(role, 'DELETE FROM public.orders', [], userId), /permission denied/)
       }
+      await assert.rejects(asRole('anon', 'DELETE FROM public.orders'), /permission denied/)
+      assert.equal((await asRole('authenticated', 'DELETE FROM public.orders RETURNING id', [], userId)).rows.length, 0)
       const result = await asRole('authenticated', "UPDATE public.orders SET status = 'delivered' RETURNING id", [], userId)
       assert.equal(result.rows.length, 0)
       assert.equal((await place(randomUUID(), items, customer, 'authenticated', userId)).total, 331)
@@ -136,6 +138,18 @@ test('PostgreSQL order creation and access policies', async (t) => {
       assert.equal(line.product_name, 'Anillo de prueba')
       assert.equal(Number(line.unit_price), 125.5)
       assert.deepEqual(await place(requestId), receipt)
+    })
+    await t.test('only admins can delete orders and their items cascade without deleting products', async () => {
+      const before = (await db.query('SELECT count(*)::int AS count FROM orders')).rows[0].count
+      assert.equal((await asRole('authenticated', 'DELETE FROM public.orders WHERE id = $1 RETURNING id', [orderId], userId)).rows.length, 0)
+      assert.equal((await db.query('SELECT * FROM order_items WHERE order_id = $1', [orderId])).rows.length, 2)
+      await assert.rejects(asRole('authenticated', 'DELETE FROM public.order_items WHERE order_id = $1', [orderId], adminId), /permission denied/)
+      const deleted = await asRole('authenticated', 'DELETE FROM public.orders WHERE id = $1 RETURNING id', [orderId], adminId)
+      assert.deepEqual(deleted.rows, [{ id: orderId }])
+      assert.equal((await db.query('SELECT * FROM order_items WHERE order_id = $1', [orderId])).rows.length, 0)
+      assert.equal((await db.query('SELECT count(*)::int AS count FROM orders')).rows[0].count, before - 1)
+      assert.equal((await db.query('SELECT id FROM products WHERE id = $1', [secondId])).rows.length, 1)
+      assert.equal((await asRole('authenticated', 'DELETE FROM public.orders WHERE id = $1 RETURNING id', [orderId], adminId)).rows.length, 0)
     })
   } finally { await db.close() }
 })

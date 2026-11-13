@@ -39,7 +39,7 @@ npm run preview
 
 El carrito guarda únicamente identificadores y cantidades en el navegador. Al finalizar, solicita nombre, dirección aproximada, teléfono y correo; no cobra ni solicita tarjetas. El cliente recibe un folio en pantalla. En **Admin → Pedidos** se consulta el detalle y se cambia el estado: pendiente, en compra/preparación, listo para entregar, entregado o cancelado.
 
-Antes de publicar el frontend, aplica `supabase/migrations/20261030120000_add_catalog_orders.sql` al proyecto de Supabase. Con la CLI autenticada y vinculada al proyecto correcto:
+Antes de publicar el frontend, aplica `supabase/migrations/20261030120000_add_catalog_orders.sql` al proyecto de Supabase. El botón «Eliminar pedido» también requiere `supabase/migrations/20261113120000_allow_admin_order_deletion.sql`, que permite borrar pedidos solo a administradores y elimina sus partidas en cascada. Con la CLI autenticada y vinculada al proyecto correcto:
 
 ```bash
 npx supabase db push --dry-run

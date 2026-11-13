@@ -48,3 +48,10 @@ export async function updateOrderStatus(id, status, previousStatus) {
   if (!data) throw new Error('El pedido cambió en otra sesión. Actualiza la lista antes de continuar.')
   return data
 }
+
+export async function deleteAdminOrder(id) {
+  const { data, error } = await supabase.from('orders').delete().eq('id', id).select('id').maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('El pedido ya no existe o no tienes permiso para eliminarlo. Actualiza la lista antes de continuar.')
+  return data
+}
