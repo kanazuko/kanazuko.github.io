@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import { catalogImageUrl, createInstagramJpeg } from '../utils/instagram'
+import { catalogImageUrl } from '../utils/instagram'
 import { normalizeInstagramPostUrl } from '../utils/instagramManual'
 import { loadInstagramPublishedProductIds } from './instagramService'
 
@@ -30,16 +30,4 @@ export async function saveManualInstagramPost(product, record, caption, url, com
   if (error?.code === '23505' || (!error && !data)) throw new Error('El registro cambió en otra sesión. Recarga la página antes de guardar.')
   if (error) throw new Error('No se pudo guardar el registro manual. Inténtalo de nuevo.')
   return data
-}
-
-export async function downloadManualInstagramPhoto(image, index) {
-  const blob = await createInstagramJpeg(image.url)
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = `producto-${image.product_id}-${index + 1}.jpg`
-  document.body.append(anchor)
-  anchor.click()
-  anchor.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 60000)
 }

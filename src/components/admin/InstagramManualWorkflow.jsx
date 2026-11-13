@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import '../../instagram.css'
-import SafeImage from '../catalog/SafeImage'
+import InstagramManualPhoto from './InstagramManualPhoto'
 import LoadingState from '../feedback/LoadingState'
 import { useAsyncData } from '../../hooks/useAsyncData'
-import { loadManualInstagramWorkspace, saveManualInstagramPost, downloadManualInstagramPhoto } from '../../services/instagramManualService'
+import { loadManualInstagramWorkspace, saveManualInstagramPost } from '../../services/instagramManualService'
 import { DEFAULT_INSTAGRAM_TEMPLATE, generateInstagramCaption } from '../../utils/instagram'
 
 function ManualWorkspace({ products, records: initialRecords, publishedProductIds, onDirtyChange }) {
@@ -44,14 +44,6 @@ function ManualWorkspace({ products, records: initialRecords, publishedProductId
     } catch (failure) { setError(failure.message) } finally { setBusy(false) }
   }
 
-  async function download(image, index) {
-    setBusy(true); setError(''); setNotice('')
-    try {
-      await downloadManualInstagramPhoto(image, index)
-      setNotice(`Descarga de la foto ${index + 1} iniciada. Revisa las descargas de tu navegador.`)
-    } catch (failure) { setError(failure.message || 'No se pudo descargar la foto.') } finally { setBusy(false) }
-  }
-
   return <div className="instagram-workspace">
     {error && <p className="form-banner form-banner--error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
@@ -88,13 +80,8 @@ function ManualWorkspace({ products, records: initialRecords, publishedProductId
       </fieldset>
       <fieldset className="instagram-fields" disabled={busy}>
         <legend>3. Descarga las fotos</legend>
-        <p>Descarga las fotos en JPG para subirlas a Instagram: 1080 × 1080 píxeles, sin recortar y con fondo blanco. Al abrir o arrastrar la miniatura obtienes el archivo original, que puede ser WebP.</p>
-        <div className="instagram-image-grid">{product.images.map((image, index) => <div className="instagram-image-choice" key={image.id}>
-          <a href={image.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir foto ${index + 1} original`}>
-            <SafeImage src={image.url} alt={image.alt_text || product.name} loading="lazy" draggable />
-          </a>
-          <button type="button" className="admin-button admin-button--secondary" onClick={() => download(image, index)}>Descargar foto {index + 1} en JPG</button>
-        </div>)}</div>
+        <p>Las miniaturas usan JPEG a resolución original, sin recortes ni márgenes añadidos. Puedes abrirlas, arrastrarlas o descargarlas. Si Instagram no acepta el arrastre desde otra pestaña, descarga el JPG y arrastra el archivo.</p>
+        <div className="instagram-image-grid">{product.images.map((image, index) => <InstagramManualPhoto key={`${image.id}:${image.url}`} image={image} index={index} productName={product.name} />)}</div>
         {!product.images.length && <p>Este producto no tiene fotos. Añádelas desde la edición del producto.</p>}
       </fieldset>
       <section>

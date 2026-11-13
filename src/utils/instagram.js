@@ -41,7 +41,7 @@ export function selectPreviewImages(draft, catalogImages, dirty) {
   }).filter(Boolean)
 }
 
-export async function createInstagramJpeg(url) {
+export async function createInstagramJpeg(url, { nativeSize = false } = {}) {
   validatePublicMediaUrl(url, 'product-images')
   const response = await fetch(url, { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000) })
   if (!response.ok) throw new Error('No se pudo descargar la fotografía original.')
@@ -52,15 +52,20 @@ export async function createInstagramJpeg(url) {
   try {
     if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > 40000000) throw new Error('La fotografía original tiene dimensiones demasiado grandes.')
     const canvas = document.createElement('canvas')
-    canvas.width = canvas.height = 1080
+    canvas.width = nativeSize ? bitmap.width : 1080
+    canvas.height = nativeSize ? bitmap.height : 1080
     const ctx = canvas.getContext('2d', { colorSpace: 'srgb' })
     if (!ctx) throw new Error('No se pudo preparar la fotografía.')
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, 1080, 1080)
-    const scale = Math.min(1080 / bitmap.width, 1080 / bitmap.height)
-    const width = Math.round(bitmap.width * scale)
-    const height = Math.round(bitmap.height * scale)
-    ctx.drawImage(bitmap, (1080 - width) / 2, (1080 - height) / 2, width, height)
+    if (!nativeSize) {
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, 1080, 1080)
+      const scale = Math.min(1080 / bitmap.width, 1080 / bitmap.height)
+      const width = Math.round(bitmap.width * scale)
+      const height = Math.round(bitmap.height * scale)
+      ctx.drawImage(bitmap, (1080 - width) / 2, (1080 - height) / 2, width, height)
+    } else {
+      ctx.drawImage(bitmap, 0, 0)
+    }
     const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
     if (!jpeg || jpeg.type !== 'image/jpeg' || jpeg.size > 8 * 1024 * 1024) throw new Error('No se pudo generar un JPEG compatible.')
     return jpeg

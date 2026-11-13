@@ -57,7 +57,7 @@ try {
   assert.doesNotMatch(await page.getByLabel('Producto', { exact: true }).innerText(), /Anillo de prueba/)
   await page.getByLabel('Categoría', { exact: true }).selectOption('rings')
   await page.getByLabel('Producto', { exact: true }).selectOption(productId)
-  const original = page.getByRole('link', { name: 'Abrir foto 1 original' })
+  const original = page.getByRole('link', { name: 'Abrir foto 1 en JPEG' })
   assert.equal(await original.getAttribute('target'), '_blank')
   assert.equal(await original.getAttribute('href'), await original.locator('img').getAttribute('src'))
   assert.equal(await original.locator('img').getAttribute('draggable'), 'true')
@@ -66,7 +66,7 @@ try {
   await page.getByRole('button', { name: 'Guardar borrador' }).click()
   await page.getByRole('status').filter({ hasText: 'Borrador guardado' }).waitFor()
   const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Descargar foto 1' }).click()
+  await page.getByRole('link', { name: 'Descargar foto 1' }).click()
   const downloaded = await download
   assert.match(downloaded.suggestedFilename(), /\.jpg$/)
   const chunks = []
@@ -77,7 +77,15 @@ try {
     const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }))
     const result = [bitmap.width, bitmap.height]; bitmap.close(); return result
   }, [...jpeg])
-  assert.deepEqual(dimensions, [1080, 1080])
+  assert.deepEqual(dimensions, [400, 700])
+  const preview = await original.locator('img').evaluate(async img => {
+    await img.decode()
+    const blob = await (await fetch(img.src)).blob()
+    const transfer = new DataTransfer()
+    img.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: transfer }))
+    return { type: blob.type, dimensions: [img.naturalWidth, img.naturalHeight], fileType: transfer.files[0]?.type }
+  })
+  assert.deepEqual(preview, { type: 'image/jpeg', dimensions: [400, 700], fileType: 'image/jpeg' })
   await page.getByLabel('Enlace de la publicación').fill('https://evil.test/p/ABC/')
   await page.getByLabel('Ya publiqué').check()
   await page.getByRole('button', { name: 'Marcar como completado' }).click()
